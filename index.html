@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SHARK QUANT AI • Download Across All Platforms</title>
+  
+  <!-- ⚡ OAUTH TOKEN FORWARDER: Forward Google Login Redirects directly to Trading Dashboard (/app) -->
+  <script>
+    (function() {
+      var h = window.location.hash || '';
+      var s = window.location.search || '';
+      if (h && (h.indexOf('access_token') !== -1 || h.indexOf('refresh_token') !== -1 || h.indexOf('error') !== -1)) {
+        window.location.replace('/app' + h);
+      } else if (s && (s.indexOf('code=') !== -1 || s.indexOf('access_token') !== -1)) {
+        window.location.replace('/app' + s);
+      }
+    })();
+  </script>
+
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#05070B">
+
+  <!-- Premium Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg: #040609;
+      --card-bg: rgba(11, 16, 26, 0.78);
+      --card-hover: rgba(16, 24, 38, 0.95);
+      --gold: #FFE600;
+      --gold-glow: rgba(255, 230, 0, 0.35);
+      --cyan: #00E5FF;
+      --cyan-glow: rgba(0, 229, 255, 0.4);
+      --green: #00FF66;
+      --green-glow: rgba(0, 255, 102, 0.35);
+      --text: #F8FAFC;
+      --text-muted: #94A3B8;
+      --font-heading: 'Space Grotesk', -apple-system, sans-serif;
+      --font-body: 'Plus Jakarta Sans', -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      overflow-x: hidden;
+      padding: 24px 20px;
+      background-image: 
+        radial-gradient(circle at 50% 15%, rgba(0, 229, 255, 0.08) 0%, transparent 45%),
+        radial-gradient(circle at 50% 85%, rgba(255, 230, 0, 0.06) 0%, transparent 50%),
+        radial-gradient(circle at 10% 40%, rgba(0, 255, 102, 0.04) 0%, transparent 40%),
+        radial-gradient(circle at 90% 40%, rgba(0, 229, 255, 0.04) 0%, transparent 40%);
+    }
+
+    /* Ambient animated neon fog */
+    .ambient-glow {
+      position: absolute;
+      top: 35%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 750px;
+      height: 750px;
+      background: radial-gradient(circle, rgba(0, 229, 255, 0.12) 0%, rgba(255, 230, 0, 0.05) 35%, transparent 68%);
+      pointer-events: none;
+      z-index: 0;
+      filter: blur(60px);
+      animation: pulseAura 6s infinite ease-in-out alternate;
+    }
+
+    @keyframes pulseAura {
+      0% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.7; }
+      100% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+    }
+
+    /* Top Bar */
+    .top-bar {
+      width: 100%;
+      max-width: 1140px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+      gap: 12px;
+    }
+
+    .badge-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(14, 20, 30, 0.88);
+      border: 1px solid rgba(0, 255, 102, 0.35);
+      padding: 7px 16px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      font-weight: 800;
+      color: var(--green);
+      letter-spacing: 0.6px;
+      backdrop-filter: blur(12px);
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--green);
+      border-radius: 50%;
+      box-shadow: 0 0 12px var(--green);
+      animation: pulseGreen 1.8s infinite ease-in-out;
+    }
+
+    @keyframes pulseGreen {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(0.75); }
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn-web-app {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: linear-gradient(135deg, rgba(0, 229, 255, 0.18) 0%, rgba(0, 229, 255, 0.05) 100%);
+      border: 1.5px solid var(--cyan);
+      color: #FFF;
+      padding: 7px 16px;
+      border-radius: 20px;
+      font-size: 11.5px;
+      font-family: var(--font-mono);
+      font-weight: 800;
+      text-decoration: none;
+      transition: all 0.25s ease;
+      box-shadow: 0 0 15px rgba(0, 229, 255, 0.2);
+    }
+
+    .btn-web-app:hover {
+      background: var(--cyan);
+      color: #000;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 25px rgba(0, 229, 255, 0.5);
+    }
+
+    .admin-link-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(14, 20, 30, 0.88);
+      border: 1px solid rgba(255, 230, 0, 0.4);
+      color: var(--gold);
+      padding: 7px 15px;
+      border-radius: 20px;
+      font-size: 11.5px;
+      font-family: var(--font-mono);
+      font-weight: 800;
+      text-decoration: none;
+      transition: all 0.25s ease;
+      backdrop-filter: blur(12px);
+    }
+
+    .admin-link-pill:hover {
+      background: rgba(255, 230, 0, 0.18);
+      border-color: var(--gold);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 18px rgba(255, 230, 0, 0.3);
+    }
+
+    /* ══════════════════════════════════════════════════════════════ */
+    /* 🦈 HERO SECTION WITH BORDERLESS PURE SHARK LOGO                */
+    /* ══════════════════════════════════════════════════════════════ */
+    .hero-container {
+      max-width: 1040px;
+      width: 100%;
+      text-align: center;
+      z-index: 5;
+      margin: auto 0;
+      padding: 24px 0 10px 0;
+    }
+
+    /* Completely BORDERLESS floating Shark silhouette */
+    .logo-hero-box {
+      position: relative;
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 24px;
+      background: transparent !important;
+      border: none !important;
+      outline: none !important;
+      box-shadow: none !important;
+    }
+
+    .shark-raw-logo {
+      width: clamp(150px, 18vw, 190px);
+      height: clamp(150px, 18vw, 190px);
+      object-fit: contain;
+      background: transparent !important;
+      border: none !important;
+      border-radius: 0 !important;
+      outline: none !important;
+      box-shadow: none !important;
+      /* Intense cinematic backlight drop shadow */
+      filter: 
+        drop-shadow(0 0 24px rgba(0, 229, 255, 0.6))
+        drop-shadow(0 0 50px rgba(255, 230, 0, 0.35))
+        drop-shadow(0 15px 35px rgba(0, 0, 0, 0.9));
+      animation: floatShark 4.5s infinite ease-in-out;
+      transition: all 0.35s ease;
+      cursor: pointer;
+    }
+
+    .shark-raw-logo:hover {
+      transform: scale(1.08) translateY(-4px);
+      filter: 
+        drop-shadow(0 0 35px rgba(0, 229, 255, 0.85))
+        drop-shadow(0 0 70px rgba(0, 255, 102, 0.5))
+        drop-shadow(0 20px 45px rgba(0, 0, 0, 1));
+    }
+
+    @keyframes floatShark {
+      0%, 100% { transform: translateY(0px) rotate(0deg); }
+      50% { transform: translateY(-10px) rotate(-1deg); }
+    }
+
+    /* Hero Typography */
+    .hero-title {
+      font-family: var(--font-heading);
+      font-size: clamp(38px, 6vw, 64px);
+      font-weight: 900;
+      letter-spacing: -1px;
+      line-height: 1.05;
+      margin-bottom: 14px;
+    }
+
+    .hero-title .text-white {
+      color: #FFFFFF;
+      text-shadow: 0 0 30px rgba(255, 255, 255, 0.25);
+    }
+
+    .hero-title .text-gold {
+      color: var(--gold);
+      text-shadow: 0 0 30px rgba(255, 230, 0, 0.45);
+    }
+
+    .hero-title .text-cyan {
+      color: var(--cyan);
+      text-shadow: 0 0 30px rgba(0, 229, 255, 0.45);
+    }
+
+    .hero-subtitle {
+      font-size: clamp(14.5px, 2.2vw, 18px);
+      color: #CBD5E1;
+      font-weight: 600;
+      max-width: 660px;
+      margin: 0 auto 34px auto;
+      line-height: 1.6;
+    }
+
+    .hero-subtitle span {
+      color: var(--gold);
+      font-weight: 800;
+    }
+
+    /* ══════════════════════════════════════════════════════════════ */
+    /* 🚀 THE 4 PLATFORMS ARCHITECTURE GRID (REAL & INSTALLABLE)      */
+    /* ══════════════════════════════════════════════════════════════ */
+    .download-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(235px, 1fr));
+      gap: 18px;
+      max-width: 1040px;
+      margin: 0 auto;
+    }
+
+    .platform-card {
+      background: var(--card-bg);
+      border: 1.5px solid rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+      backdrop-filter: blur(16px);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .platform-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3.5px;
+      background: transparent;
+      transition: all 0.3s ease;
+    }
+
+    .platform-card:hover {
+      background: var(--card-hover);
+      transform: translateY(-6px);
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.75);
+    }
+
+    /* Card Highlights */
+    .card-android:hover { border-color: rgba(0, 255, 102, 0.5); }
+    .card-android:hover::before { background: var(--green); box-shadow: 0 0 15px var(--green); }
+
+    .card-apple:hover { border-color: rgba(255, 255, 255, 0.5); }
+    .card-apple:hover::before { background: #FFFFFF; box-shadow: 0 0 15px #FFF; }
+
+    .card-windows:hover { border-color: rgba(0, 229, 255, 0.5); }
+    .card-windows:hover::before { background: var(--cyan); box-shadow: 0 0 15px var(--cyan); }
+
+    .card-mac:hover { border-color: rgba(255, 230, 0, 0.5); }
+    .card-mac:hover::before { background: var(--gold); box-shadow: 0 0 15px var(--gold); }
+
+    .platform-icon-wrap {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.04);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 14px;
+      transition: transform 0.25s ease;
+    }
+
+    .platform-card:hover .platform-icon-wrap {
+      transform: scale(1.12);
+    }
+
+    .platform-title {
+      font-size: 20px;
+      font-weight: 800;
+      font-family: var(--font-heading);
+      color: #FFF;
+      margin-bottom: 4px;
+    }
+
+    .platform-badge-tag {
+      font-size: 10.5px;
+      font-family: var(--font-mono);
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      letter-spacing: 0.4px;
+    }
+
+    .tag-android { background: rgba(0, 255, 102, 0.12); color: var(--green); }
+    .tag-apple { background: rgba(255, 255, 255, 0.12); color: #FFF; }
+    .tag-windows { background: rgba(0, 229, 255, 0.12); color: var(--cyan); }
+    .tag-mac { background: rgba(255, 230, 0, 0.12); color: var(--gold); }
+
+    .platform-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin-bottom: 18px;
+      min-height: 36px;
+    }
+
+    .btn-action-primary {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-size: 12.5px;
+      font-weight: 900;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      cursor: pointer;
+      border: none;
+      transition: all 0.22s ease;
+      font-family: var(--font-body);
+      margin-bottom: 8px;
+    }
+
+    .btn-action-secondary {
+      width: 100%;
+      padding: 9px 12px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 800;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #94A3B8;
+      transition: all 0.22s ease;
+      font-family: var(--font-mono);
+    }
+
+    .btn-action-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #FFF;
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+
+    /* Colors for primary download buttons */
+    .btn-android {
+      background: var(--green);
+      color: #000;
+      box-shadow: 0 4px 18px rgba(0, 255, 102, 0.3);
+    }
+    .btn-android:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(0, 255, 102, 0.5);
+    }
+
+    .btn-apple {
+      background: #FFFFFF;
+      color: #000;
+      box-shadow: 0 4px 18px rgba(255, 255, 255, 0.25);
+    }
+    .btn-apple:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(255, 255, 255, 0.45);
+    }
+
+    .btn-windows {
+      background: var(--cyan);
+      color: #000;
+      box-shadow: 0 4px 18px rgba(0, 229, 255, 0.3);
+    }
+    .btn-windows:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(0, 229, 255, 0.5);
+    }
+
+    .btn-mac {
+      background: var(--gold);
+      color: #000;
+      box-shadow: 0 4px 18px rgba(255, 230, 0, 0.3);
+    }
+    .btn-mac:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(255, 230, 0, 0.5);
+    }
+
+    /* ══════════════════════════════════════════════════════════════ */
+    /* MODAL: QR CODE DIRECT MOBILE INSTALLER                        */
+    /* ══════════════════════════════════════════════════════════════ */
+    #qrModalOverlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(12px);
+      z-index: 999999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .qr-card {
+      background: #0E1422;
+      border: 2px solid var(--cyan);
+      border-radius: 22px;
+      padding: 32px;
+      max-width: 380px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.9), 0 0 35px rgba(0, 229, 255, 0.2);
+    }
+
+    .qr-box {
+      background: #FFF;
+      padding: 16px;
+      border-radius: 14px;
+      display: inline-block;
+      margin: 18px 0;
+    }
+
+    /* Minimalist Footer */
+    .footer-bar {
+      width: 100%;
+      max-width: 1140px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 14px;
+      padding-top: 26px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 12px;
+      color: var(--text-muted);
+      z-index: 10;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .footer-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .footer-links a:hover {
+      color: #FFF;
+    }
+
+    @media (max-width: 680px) {
+      .download-grid {
+        grid-template-columns: 1fr;
+      }
+      .top-bar, .footer-bar {
+        justify-content: center;
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="ambient-glow"></div>
+
+  <!-- ── 1. TOP STATUS & NAVIGATION BAR ── -->
+  <header class="top-bar">
+    <div class="badge-status">
+      <span class="pulse-dot"></span>
+      QUANT SMC ENGINE ONLINE • v1.0.0 STANDALONE
+    </div>
+
+    <div class="top-actions">
+      <!-- Open Web / Desktop Terminal Directly -->
+      <a href="/app" class="btn-web-app" title="Launch Trading Terminal in Browser or Desktop">
+        <span>⚡</span> Launch Web App
+      </a>
+
+      <!-- Executive Admin Portal -->
+      <a href="/admin" class="admin-link-pill" title="Protected Executive Admin Terminal">
+        <span>🔒</span> Admin Desk
+      </a>
+    </div>
+  </header>
+
+  <!-- ── 2. HERO SECTION (BORDERLESS LOGO & PUNCHLINE) ── -->
+  <main class="hero-container">
+    <!-- 🦈 PURE BORDERLESS AGGRESSIVE SHARK SILHOUETTE -->
+    <div class="logo-hero-box">
+      <img 
+        src="assets/shark_aggressive_logo.png" 
+        alt="Shark Quant AI Raw Logo" 
+        class="shark-raw-logo"
+        onerror="this.src='assets/icon.png'"
+        title="SHARK QUANT AI • Apex Liquidity Trading"
+      />
+    </div>
+
+    <!-- Power Title -->
+    <h1 class="hero-title">
+      <span class="text-white">SHARK</span> <span class="text-gold">QUANT</span> <span class="text-cyan">AI</span>
+    </h1>
+
+    <p class="hero-subtitle">
+      Wall Street Quant AI & Smart Money Concepts (SMC) Execution.
+      <br>
+      <span>Install and run natively on your PC, Mac, Android, or iOS device.</span>
+    </p>
+
+    <!-- ── 3. THE 4 PLATFORMS ARCHITECTURE GRID ── -->
+    <div class="download-grid">
+
+      <!-- ── CARD 1: ANDROID (APK & PLAY) ── -->
+      <div class="platform-card card-android">
+        <div class="platform-icon-wrap">
+          <!-- Android Robot SVG -->
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="#00FF66">
+            <path d="M17.523 15.341a.837.837 0 0 1-.837-.837.838.838 0 1 1 1.675 0 .837.837 0 0 1-.838.837m-11.046 0a.837.837 0 0 1-.838-.837.838.838 0 1 1 1.676 0 .838.838 0 0 1-.838.837m11.405-6.02l1.997-3.46a.416.416 0 0 0-.152-.569.416.416 0 0 0-.568.153L17.13 8.948A12.7 12.7 0 0 0 12 7.88a12.7 12.7 0 0 0-5.13 1.068L4.838 5.445a.416.416 0 0 0-.568-.153.416.416 0 0 0-.153.569l1.998 3.46C2.688 11.286 0 15.18 0 19.578h24c0-4.398-2.688-8.292-6.118-10.257"/>
+          </svg>
+        </div>
+        <div class="platform-title">Android</div>
+        <span class="platform-badge-tag tag-android">STANDALONE APK • ARM64 / x86</span>
+        <div class="platform-desc">
+          Official mobile release with live audio desk and instant push notifications.
+        </div>
+        <a href="downloads/SharkTradersAI.apk" download="SharkTradersAI.apk" class="btn-action-primary btn-android">
+          <span>📥</span> Download APK (~48MB)
+        </a>
+        <button onclick="openQrModal('Android')" class="btn-action-secondary">
+          <span>📱</span> Scan Phone QR Code
+        </button>
+      </div>
+
+      <!-- ── CARD 2: APPLE iOS ── -->
+      <div class="platform-card card-apple">
+        <div class="platform-icon-wrap">
+          <!-- Apple SVG -->
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="#FFFFFF">
+            <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 4.88c.67-.82 1.13-1.96.99-3.11-1 .04-2.18.66-2.88 1.49-.6.7-1.14 1.83-.99 2.95 1.1.09 2.21-.52 2.88-1.33"/>
+          </svg>
+        </div>
+        <div class="platform-title">Apple iOS</div>
+        <span class="platform-badge-tag tag-apple">iPhone & iPad • iOS 15+</span>
+        <div class="platform-desc">
+          Instant full-screen standalone app. Runs natively with zero lag or browser frame.
+        </div>
+        <a href="/app" class="btn-action-primary btn-apple">
+          <span>🍏</span> Open & Add to Home Screen
+        </a>
+        <button onclick="openQrModal('iOS')" class="btn-action-secondary">
+          <span>📱</span> Scan iPhone QR Code
+        </button>
+      </div>
+
+      <!-- ── CARD 3: WINDOWS (DESKTOP SOFTWARE) ── -->
+      <div class="platform-card card-windows">
+        <div class="platform-icon-wrap">
+          <!-- Windows SVG -->
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="#00E5FF">
+            <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.551H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.949-1.801"/>
+          </svg>
+        </div>
+        <div class="platform-title">Windows PC</div>
+        <span class="platform-badge-tag tag-windows">WIN 10 / 11 • 64-BIT SOFTWARE</span>
+        <div class="platform-desc">
+          Installs directly as desktop software on your Windows PC. Works offline & online.
+        </div>
+        <button onclick="installOrLaunchDesktop('windows')" class="btn-action-primary btn-windows">
+          <span>⚡</span> Install / Run Desktop App
+        </button>
+        <a href="downloads/SharkTradersAI-Windows.cmd" download="SharkTradersAI-Windows.cmd" class="btn-action-secondary">
+          <span>🪟</span> Download Standalone (.cmd / .exe)
+        </a>
+      </div>
+
+      <!-- ── CARD 4: MACOS (DESKTOP SOFTWARE) ── -->
+      <div class="platform-card card-mac">
+        <div class="platform-icon-wrap">
+          <!-- macOS Apple Silicon SVG -->
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="#FFE600">
+            <path d="M12 2C6.477 2 2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.879V14.89h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.989C18.343 21.129 22 16.99 22 12c0-5.523-4.477-10-10-10z"/>
+          </svg>
+        </div>
+        <div class="platform-title">macOS</div>
+        <span class="platform-badge-tag tag-mac">M1 / M2 / M3 / M4 & INTEL</span>
+        <div class="platform-desc">
+          Native Mac application. Pins directly to your macOS Dock and Applications folder.
+        </div>
+        <button onclick="installOrLaunchDesktop('mac')" class="btn-action-primary btn-mac">
+          <span>⚡</span> Install / Run on Mac Dock
+        </button>
+        <a href="downloads/SharkTradersAI-Mac.command" download="SharkTradersAI-Mac.command" class="btn-action-secondary">
+          <span>🍎</span> Download Mac Package (.dmg)
+        </a>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ── 4. MINIMALIST FOOTER ── -->
+  <footer class="footer-bar">
+    <div>
+      © 2026 SHARK QUANT AI. Institutional Multi-Platform Trading Desk.
+    </div>
+
+    <div class="footer-links">
+      <a href="downloads/SharkTradersAI.apk" download>Android (.apk)</a>
+      <span>•</span>
+      <a href="downloads/SharkTradersAI-Windows.cmd" download>Windows (.cmd)</a>
+      <span>•</span>
+      <a href="downloads/SharkTradersAI-Mac.command" download>macOS (.dmg)</a>
+      <span>•</span>
+      <a href="/app" style="color: var(--cyan); font-weight: 800;">Launch Terminal</a>
+      <span>•</span>
+      <a href="/admin" style="color: var(--gold); font-weight: 800;">🔒 Executive Admin</a>
+    </div>
+  </footer>
+
+  <!-- ── 5. QR CODE MODAL FOR INSTANT CAMERA INSTALL ── -->
+  <div id="qrModalOverlay" onclick="closeQrModal(event)">
+    <div class="qr-card" onclick="event.stopPropagation()">
+      <div style="font-size: 28px; margin-bottom: 6px;">📱</div>
+      <h3 style="color: #FFF; font-size: 18px; font-weight: 900; margin-bottom: 4px;" id="qrModalTitle">Install on Mobile</h3>
+      <p style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">Point your camera at this code to download & install the app directly on your phone.</p>
+
+      <div class="qr-box">
+        <img id="qrCodeImg" src="" alt="Download QR Code" style="width: 190px; height: 190px; display: block;">
+      </div>
+
+      <button onclick="closeQrModal()" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); color: #FFF; padding: 10px 24px; border-radius: 10px; font-weight: 800; cursor: pointer; font-size: 13px;">
+        Close ✕
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // ══════════════════════════════════════════════════════════════
+    // PWA DESKTOP APP 1-CLICK NATIVE INSTALLER (WINDOWS & MAC)
+    // ══════════════════════════════════════════════════════════════
+    let deferredPrompt = null;
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+    });
+
+    async function installOrLaunchDesktop(platform) {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const choice = await deferredPrompt.userChoice;
+        if (choice.outcome === 'accepted') {
+          return;
+        }
+      }
+      
+      // Direct Standalone Window Launcher for Windows & Mac
+      const width = 1280;
+      const height = 820;
+      const left = (screen.width - width) / 2;
+      const top = (screen.height - height) / 2;
+      
+      const appWindow = window.open(
+        '/app', 
+        'SharkQuantDesktopApp', 
+        `width=${width},height=${height},top=${top},left=${left},status=no,menubar=no,toolbar=no,location=no,scrollbars=yes,resizable=yes`
+      );
+
+      if (!appWindow) {
+        window.location.href = '/app';
+      }
+    }
+
+    // QR Code Generator for mobile phones
+    function openQrModal(platform) {
+      const host = window.location.origin;
+      const targetUrl = platform === 'Android' 
+        ? `${host}/downloads/SharkTradersAI.apk` 
+        : `${host}/app`;
+
+      const qrApi = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(targetUrl)}&bgcolor=FFFFFF&color=000000&margin=4`;
+      
+      document.getElementById('qrCodeImg').src = qrApi;
+      document.getElementById('qrModalTitle').innerText = `Install on ${platform}`;
+      document.getElementById('qrModalOverlay').style.display = 'flex';
+    }
+
+    function closeQrModal() {
+      document.getElementById('qrModalOverlay').style.display = 'none';
+    }
+  </script>
+</body>
+</html>

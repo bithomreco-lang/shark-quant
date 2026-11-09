@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SHARK TRADERS AI // لوحة تحكم الآدمن وقاعدة بيانات Supabase</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: #07090E;
+      color: #E6EDF5;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Roboto, sans-serif;
+      padding: 24px;
+      min-height: 100vh;
+    }
+
+    /* ══════════════════════════════════════════════════════════════ */
+    /* 🔒 INSTITUTIONAL PASSWORD GATE (amine123123@)                   */
+    /* ══════════════════════════════════════════════════════════════ */
+    #adminAuthGateOverlay {
+      position: fixed;
+      inset: 0;
+      background: #06080C;
+      background-image: 
+        radial-gradient(circle at 50% 20%, rgba(255, 230, 0, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(0, 229, 255, 0.05) 0%, transparent 40%);
+      z-index: 999999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .gate-card {
+      background: #0E131E;
+      border: 2px solid #243048;
+      box-shadow: 0 25px 70px rgba(0, 0, 0, 0.85), 0 0 40px rgba(255, 230, 0, 0.06);
+      border-radius: 22px;
+      padding: 38px 32px;
+      max-width: 440px;
+      width: 100%;
+      text-align: center;
+      animation: gatePop 0.3s ease-out;
+    }
+
+    @keyframes gatePop {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .gate-title {
+      font-size: 24px;
+      font-weight: 900;
+      color: #FFF;
+      margin-bottom: 6px;
+    }
+
+    .gate-title span {
+      color: #FFE600;
+    }
+
+    .gate-subtitle {
+      font-size: 12px;
+      color: #8A9BB4;
+      font-weight: 800;
+      letter-spacing: 1px;
+      margin-bottom: 26px;
+      font-family: monospace;
+    }
+
+    .gate-input-wrapper {
+      position: relative;
+      margin-bottom: 18px;
+    }
+
+    .gate-input {
+      width: 100%;
+      background: #06090F;
+      border: 1.5px solid #283750;
+      border-radius: 12px;
+      padding: 14px 44px 14px 16px;
+      color: #FFF;
+      font-size: 15px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+      letter-spacing: 2px;
+      outline: none;
+      direction: ltr;
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .gate-input:focus {
+      border-color: #FFE600;
+      box-shadow: 0 0 16px rgba(255, 230, 0, 0.2);
+    }
+
+    .gate-toggle-eye {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: transparent;
+      border: none;
+      color: #8A9BB4;
+      cursor: pointer;
+      font-size: 16px;
+      padding: 4px;
+    }
+
+    .gate-btn {
+      width: 100%;
+      background: linear-gradient(135deg, #FFE600 0%, #FFB703 100%);
+      color: #000;
+      font-weight: 900;
+      border: none;
+      padding: 15px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 15px;
+      letter-spacing: 0.5px;
+      box-shadow: 0 6px 20px rgba(255, 230, 0, 0.3);
+      transition: all 0.2s ease;
+    }
+
+    .gate-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 26px rgba(255, 230, 0, 0.45);
+    }
+
+    .gate-error {
+      color: #FF3366;
+      font-size: 12.5px;
+      font-weight: 800;
+      margin-top: 14px;
+      display: none;
+    }
+
+    /* ══════════════════════════════════════════════════════════════ */
+    /* DASHBOARD STYLES                                               */
+    /* ══════════════════════════════════════════════════════════════ */
+    .top-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 18px;
+      border-bottom: 3px solid #FFE600;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .brand-title {
+      font-size: 24px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      color: #FFF;
+    }
+
+    .brand-title span {
+      color: #FFE600;
+    }
+
+    .badges-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .badge-live {
+      background: #00FF66;
+      color: #000;
+      font-weight: 900;
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 6px;
+    }
+
+    .badge-supa {
+      background: #1A2333;
+      color: #00E5FF;
+      border: 1px solid #00E5FF;
+      font-weight: 800;
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 6px;
+    }
+
+    .btn-lock-desk {
+      background: rgba(255, 51, 102, 0.14);
+      color: #FF4D88;
+      border: 1.5px solid #FF3366;
+      font-weight: 900;
+      font-size: 11.5px;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.2s;
+    }
+
+    .btn-lock-desk:hover {
+      background: #FF3366;
+      color: #FFF;
+    }
+
+    .grid-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: #101520;
+      border: 2px solid #20283A;
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .stat-card.glow-green {
+      border-color: #00FF66;
+    }
+
+    .stat-card.glow-yellow {
+      border-color: #FFE600;
+    }
+
+    .stat-card.glow-cyan {
+      border-color: #00E5FF;
+    }
+
+    .stat-title {
+      font-size: 12px;
+      color: #8A9BB4;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    .stat-num {
+      font-size: 26px;
+      font-weight: 900;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .control-box {
+      background: #101520;
+      border: 2px solid #242E42;
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .control-box.supa-box {
+      border-color: #00E5FF;
+    }
+
+    .control-box.ai-box {
+      border-color: #FFE600;
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 900;
+      color: #FFE600;
+      margin-bottom: 12px;
+    }
+
+    .input-group {
+      margin-bottom: 14px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: #A0B0C4;
+      margin-bottom: 6px;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    textarea,
+    select {
+      width: 100%;
+      background: #07090E;
+      border: 1px solid #283347;
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: #FFF;
+      font-size: 13px;
+      outline: none;
+      direction: ltr;
+      text-align: left;
+    }
+
+    input:focus,
+    textarea:focus {
+      border-color: #00FF66;
+    }
+
+    .btn-save {
+      background: #FFE600;
+      color: #000;
+      font-weight: 900;
+      border: none;
+      padding: 11px 22px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      width: 100%;
+    }
+
+    .btn-supa {
+      background: #00E5FF;
+      color: #000;
+    }
+
+    .table-container {
+      background: #101520;
+      border: 2px solid #20283A;
+      border-radius: 12px;
+      padding: 20px;
+      overflow-x: auto;
+      margin-bottom: 24px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: right;
+    }
+
+    th {
+      font-size: 12px;
+      color: #8A9BB4;
+      padding: 12px;
+      border-bottom: 2px solid #20283A;
+    }
+
+    td {
+      padding: 14px 12px;
+      border-bottom: 1px solid #1A2130;
+      font-size: 13px;
+      vertical-align: top;
+    }
+
+    .badge-status {
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 800;
+      display: inline-block;
+    }
+
+    .status-active {
+      background: rgba(0, 255, 102, 0.15);
+      color: #00FF66;
+      border: 1px solid #00FF66;
+    }
+
+    .status-suspended {
+      background: rgba(255, 0, 85, 0.15);
+      color: #FF0055;
+      border: 1px solid #FF0055;
+    }
+
+    .btn-toggle,
+    .plan-select {
+      background: #182030;
+      border: 1px solid #2E3A52;
+      color: #FFF;
+      padding: 6px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      background: #00FF66;
+      color: #000;
+      font-weight: 900;
+      padding: 12px 20px;
+      border-radius: 8px;
+      display: none;
+      z-index: 999999;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <!-- 🔒 MASTER PASSWORD AUTHENTICATION GATE (amine123123@)          -->
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <div id="adminAuthGateOverlay">
+    <div class="gate-card">
+      <div style="font-size: 48px; margin-bottom: 10px;">🦈</div>
+      <h2 class="gate-title">SHARK <span>TRADERS AI</span></h2>
+      <div class="gate-subtitle">RESTRICTED EXECUTIVE ADMIN TERMINAL</div>
+
+      <div class="gate-input-wrapper">
+        <input 
+          type="password" 
+          id="adminPassInput" 
+          class="gate-input" 
+          placeholder="أدخل كلمة مرور الآدمن..." 
+          autocomplete="current-password"
+          autofocus
+        />
+        <button type="button" class="gate-toggle-eye" onclick="togglePassVisibility()" title="إظهار / إخفاء كلمة السر">👁️</button>
+      </div>
+
+      <button type="button" class="gate-btn" onclick="submitAdminPass()">
+        دخول لوحة الآدمن (UNLOCK TERMINAL) 🔓
+      </button>
+
+      <div id="adminGateError" class="gate-error">
+        ⚠️ كلمة السر غير صحيحة! يرجى المحاولة مرة أخرى.
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <!-- MAIN ADMIN DASHBOARD                                          -->
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <div id="adminMainDashboard" style="display: none;">
+    <div class="top-header">
+      <div class="brand-title">🦈 SHARK <span>TRADERS AI</span> // إدارة النظام وقاعدة البيانات</div>
+      <div class="badges-row">
+        <div class="badge-supa" id="supaBadge">⚡ فحص اتصال Supabase...</div>
+        <div class="badge-live">ONLINE • PORT 5000</div>
+        <button class="btn-lock-desk" onclick="lockAdminDesk()" title="قفل لوحة التحكم فورياً">
+          🔒 قفل اللوحة
+        </button>
+      </div>
+    </div>
+
+    <div class="grid-stats">
+      <div class="stat-card glow-yellow">
+        <div class="stat-title">إجمالي حسابات جوجل المسجلة (Users)</div>
+        <div class="stat-num" id="totalUsers">0</div>
+      </div>
+      <div class="stat-card glow-green">
+        <div class="stat-title">المتداولون النشطون (Active Subscribers)</div>
+        <div class="stat-num" id="activeSubscribers" style="color: #00FF66;">0</div>
+      </div>
+      <div class="stat-card glow-cyan">
+        <div class="stat-title">ملفات تعلم الذكاء الاصطناعي (Learned Profiles)</div>
+        <div class="stat-num" id="learnedCount" style="color: #00E5FF;">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">حالة مفتاح الذكاء الاصطناعي (Gemini Live Key)</div>
+        <div class="stat-num" id="apiKeyStatus" style="font-size: 16px; margin-top: 6px; color: #FFE600;">Checking...</div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <!-- Supabase Cloud Configuration -->
+      <div class="control-box supa-box">
+        <div class="section-title" style="color: #00E5FF;">☁️ ربط قاعدة بيانات Supabase PostgreSQL السحابية</div>
+        <p style="font-size: 12px; color: #8C9CB2; margin-bottom: 14px; line-height: 1.5;">
+          ضع رابط مشروعك في Supabase ومفتاح <code>service_role</code> أو <code>anon</code> ليتم مزامنة جميع حسابات جوجل،
+          المحادثات الخاصة، رسائل الكومونتي، وذاكرة تعلم الذكاء لحظياً. (الملف الجاهز للجداول موجود في
+          <code>supabase_schema.sql</code>).
+        </p>
+        <div class="input-group">
+          <label>Supabase Project URL:</label>
+          <input type="text" id="supabaseUrlInput" placeholder="https://xxxx.supabase.co" />
+        </div>
+        <div class="input-group">
+          <label>Supabase API Key (يفضل مفتاح Secret / service_role أو Publishable):</label>
+          <input type="password" id="supabaseKeyInput" placeholder="sb_secret_... أو eyJhbGciOiJIUzI1NiIs..." />
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn-save btn-supa" style="flex:1;" onclick="saveConfiguration()">حفظ وتفعيل الربط مع SUPABASE
+            ⚡</button>
+          <button class="btn-save" style="flex:1; background:#00FF66; color:#000;" onclick="forceSyncNow()">🔄 رفع ومزامنة
+            كل الداتا الآن</button>
+        </div>
+        <div id="rlsWarningBox"
+          style="display:none; margin-top:12px; background:rgba(255,0,85,0.14); border:1.5px solid #FF0055; border-radius:8px; padding:12px;">
+          <div style="color:#FF4D88; font-weight:900; font-size:13px; margin-bottom:6px;">
+            ⚠️ تنبيه هام: جداول Supabase مقفلة بخاصية (Row-Level Security - RLS)!
+          </div>
+          <p style="font-size:12px; color:#E2E8F0; line-height:1.5; margin-bottom:8px;">
+            أنت تستخدم مفتاح <code>sb_publishable</code> بينما الجداول في Supabase عليها قفل حماية يمنع كتابة البيانات.
+            لحل هذا في 5 ثوانٍ، اضغط الزر بالأسفل لنسخ أمر فتح القفل والصقه في <strong>SQL Editor</strong> داخل Supabase
+            ثم اضغط <strong>RUN</strong> (أو ضع مفتاح <code>sb_secret_...</code> في الخانة أعلاه):
+          </p>
+          <button class="btn-save" style="background:#FFE600; color:#000; font-size:12px; padding:8px 14px;"
+            onclick="copyRlsUnlockSql()">
+            📋 نسخ كود فتح قفل الجداول (SQL Editor -> RUN)
+          </button>
+        </div>
+      </div>
+
+      <!-- Gemini AI Key Configuration -->
+      <div class="control-box ai-box">
+        <div class="section-title">🔑 إعدادات محرك الذكاء الصوتي والتحليلي (Gemini & Charon)</div>
+        <p style="font-size: 12px; color: #8C9CB2; margin-bottom: 14px; line-height: 1.5;">
+          مفتاح الذكاء الاصطناعي محفوظ بأمان تام على السيرفر ولا يظهر للمستخدمين. يمكنك تحديثه في أي لحظة.
+        </p>
+        <div class="input-group">
+          <label>Google Gemini API Key:</label>
+          <input type="password" id="apiKeyInput" placeholder="أدخل مفتاح Gemini الجديد في حال رغبت بتغييره..." />
+        </div>
+        <div class="input-group">
+          <label>الموديل النشط (Active Model):</label>
+          <select id="modelSelect">
+            <option value="gemini-3-flash-preview">Gemini 3 Flash Preview + Charon Live</option>
+            <option value="gemini-2.5-flash">Gemini 2.5 Flash + Charon Live</option>
+          </select>
+        </div>
+        <button class="btn-save" onclick="saveConfiguration()">حفظ وتحديث محرك الذكاء 🚀</button>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <div
+        style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
+        <div class="section-title" style="color: #00FF66; margin-bottom:0;">👥 قاعدة بيانات المشتركين الحقيقيين (Google
+          Accounts & @Usernames)</div>
+        <div style="min-width:290px; flex:1; max-width:400px;">
+          <input type="text" id="userSearchInput" oninput="renderUsersTable()"
+            placeholder="🔍 ابحث باليوزرنيم @username أو الاسم أو الإيميل..."
+            style="direction:rtl; text-align:right; border-color:#00E5FF;" />
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>المتداول (الاسم + @Username + الإيميل)</th>
+            <th>الباقة (Plan)</th>
+            <th>رأس المال والمخاطرة</th>
+            <th>النشاط</th>
+            <th>🧠 عقل وذاكرة الذكاء</th>
+            <th>الحالة</th>
+            <th>تحكم فوري</th>
+          </tr>
+        </thead>
+        <tbody id="usersTableBody">
+          <tr>
+            <td colspan="7">جاري تحميل البيانات...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- نافذة عقل الذكاء المنبثقة -->
+  <div id="brainModalOverlay"
+    style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.82); z-index:1000; align-items:center; justify-content:center; padding:20px;"
+    onclick="closeBrainModal(event)">
+    <div
+      style="background:#101624; border:2px solid #00E5FF; border-radius:14px; max-width:540px; width:100%; padding:22px; box-shadow:0 15px 40px rgba(0,229,255,0.2);"
+      onclick="event.stopPropagation()">
+      <div
+        style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1E293B; padding-bottom:12px; margin-bottom:14px;">
+        <div style="font-size:17px; font-weight:900; color:#00E5FF;" id="brainModalTitle">🧠 ذاكرة الذكاء المتعلمة</div>
+        <button onclick="closeBrainModal()"
+          style="background:#FF0055; color:#FFF; border:none; border-radius:6px; padding:5px 12px; font-weight:900; cursor:pointer;">إغلاق
+          ✕</button>
+      </div>
+      <div id="brainModalContent"
+        style="font-size:13.5px; line-height:1.8; color:#E2E8F0; white-space:pre-line; background:#090D16; padding:14px; border-radius:10px; border-right:4px solid #00FF66;">
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toastMsg">تم الحفظ بنجاح!</div>
+
+  <script>
+    // ══════════════════════════════════════════════════════════════
+    // 🔒 AUTHENTICATION LOGIC WITH PASSWORD (amine123123@)
+    // ══════════════════════════════════════════════════════════════
+    const MASTER_KEY = 'amine123123@';
+
+    function initAuth() {
+      const isAuthed = sessionStorage.getItem('shark_admin_authed') === 'true' || localStorage.getItem('shark_admin_authed') === 'true';
+      if (isAuthed) {
+        unlockDashboard();
+      } else {
+        document.getElementById('adminAuthGateOverlay').style.display = 'flex';
+        document.getElementById('adminMainDashboard').style.display = 'none';
+      }
+    }
+
+    function togglePassVisibility() {
+      const input = document.getElementById('adminPassInput');
+      input.type = input.type === 'password' ? 'text' : 'password';
+    }
+
+    function submitAdminPass() {
+      const entered = (document.getElementById('adminPassInput').value || '').trim();
+      const errEl = document.getElementById('adminGateError');
+
+      if (entered === MASTER_KEY) {
+        sessionStorage.setItem('shark_admin_authed', 'true');
+        localStorage.setItem('shark_admin_authed', 'true');
+        errEl.style.display = 'none';
+        unlockDashboard();
+      } else {
+        errEl.style.display = 'block';
+        document.getElementById('adminPassInput').focus();
+      }
+    }
+
+    document.getElementById('adminPassInput').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        submitAdminPass();
+      }
+    });
+
+    function unlockDashboard() {
+      document.getElementById('adminAuthGateOverlay').style.display = 'none';
+      document.getElementById('adminMainDashboard').style.display = 'block';
+      fetchStatus();
+      if (!window.statusInterval) {
+        window.statusInterval = setInterval(fetchStatus, 2000);
+      }
+    }
+
+    function lockAdminDesk() {
+      sessionStorage.removeItem('shark_admin_authed');
+      localStorage.removeItem('shark_admin_authed');
+      if (window.statusInterval) {
+        clearInterval(window.statusInterval);
+        window.statusInterval = null;
+      }
+      document.getElementById('adminPassInput').value = '';
+      document.getElementById('adminGateError').style.display = 'none';
+      document.getElementById('adminMainDashboard').style.display = 'none';
+      document.getElementById('adminAuthGateOverlay').style.display = 'flex';
+    }
+
+    let cachedUsers = [];
+    let cachedMemMap = {};
+
+    function openBrainModal(emailKey, name, username) {
+      const mem = cachedMemMap[emailKey] || {};
+      const dossier = mem.summaryDossier || 'لم يتفاعل هذا المتداول في الشات بعد. بمجرد إرسال أول رسالة أو مكالمة سيبني الذكاء ملفه التحليلي تلقائياً.';
+      const topics = Array.isArray(mem.recentTopics) && mem.recentTopics.length > 0
+        ? '\n\n📌 آخر الأسئلة والاستفسارات:\n• ' + mem.recentTopics.join('\n• ')
+        : '';
+      const setups = Array.isArray(mem.recentSetups) && mem.recentSetups.length > 0
+        ? '\n\n🎯 آخر الصفقات التي طلبها:\n' + mem.recentSetups.slice(0, 3).map(s => `• ${s.direction} ${s.asset} @ ${s.entry} (TP1: ${s.tp1} | SL: ${s.sl})`).join('\n')
+        : '';
+
+      document.getElementById('brainModalTitle').innerText = `🧠 ما تعلمه الذكاء عن: ${name} (@${username})`;
+      document.getElementById('brainModalContent').innerText = dossier + topics + setups;
+      document.getElementById('brainModalOverlay').style.display = 'flex';
+    }
+
+    function closeBrainModal() {
+      document.getElementById('brainModalOverlay').style.display = 'none';
+    }
+
+    function renderUsersTable() {
+      const q = (document.getElementById('userSearchInput')?.value || '').trim().toLowerCase().replace(/^@+/, '');
+      const tbody = document.getElementById('usersTableBody');
+      tbody.innerHTML = '';
+
+      const filtered = cachedUsers.filter(u => {
+        if (!q) return true;
+        return (
+          (u.name || '').toLowerCase().includes(q) ||
+          (u.username || '').toLowerCase().includes(q) ||
+          (u.email || '').toLowerCase().includes(q)
+        );
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#8A9BB4; padding:24px;">لا يوجد متداول مطابق للبحث</td></tr>';
+        return;
+      }
+
+      filtered.forEach(u => {
+        const emailKey = (u.email || '').toLowerCase();
+        const handle = u.username || emailKey.split('@')[0];
+        const safeName = (u.name || 'Trader').replace(/'/g, "\\'");
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <strong style="color:#FFF; font-size:14px">${u.name}</strong>
+              <span style="background:rgba(0,229,255,0.14); color:#00E5FF; border:1px solid #00E5FF; font-size:11px; font-weight:800; padding:2px 8px; border-radius:12px; direction:ltr;">@${handle}</span>
+              ${u.role === 'ADMIN' ? '<span style="background:#FFE600;color:#000;font-size:10px;font-weight:900;padding:2px 6px;border-radius:4px;">👑 ADMIN</span>' : ''}
+            </div>
+            <small style="color:#94A3B8; direction:ltr; display:inline-block; margin-top:4px;">${u.email}</small>
+            <br><small style="color:#56657A">انضم: ${u.joinedAt || '-'}</small>
+          </td>
+          <td>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <!-- Direct 1-Click Plan Switcher Buttons -->
+              <div style="display:flex; gap:4px; background:#090C12; padding:3px; border-radius:8px; border:1px solid #1E293B; width:fit-content;">
+                <button onclick="changeUserPlan('${u.id}', 'FREE')" style="cursor:pointer; border:none; padding:5px 9px; border-radius:6px; font-size:11px; font-weight:900; background:${(u.plan || 'FREE').toUpperCase().includes('FREE') ? '#334155' : 'transparent'}; color:${(u.plan || 'FREE').toUpperCase().includes('FREE') ? '#FFF' : '#64748B'};">
+                  FREE
+                </button>
+                <button onclick="changeUserPlan('${u.id}', 'VIP')" style="cursor:pointer; border:none; padding:5px 9px; border-radius:6px; font-size:11px; font-weight:900; background:${(u.plan || '').toUpperCase().includes('VIP') ? '#FFE600' : 'transparent'}; color:${(u.plan || '').toUpperCase().includes('VIP') ? '#000' : '#94A3B8'};">
+                  ⚡ VIP
+                </button>
+                <button onclick="changeUserPlan('${u.id}', 'PREMIUM')" style="cursor:pointer; border:none; padding:5px 9px; border-radius:6px; font-size:11px; font-weight:900; background:${(u.plan || '').toUpperCase().includes('PREMIUM') || (u.plan || '').toUpperCase().includes('PARTNER') ? '#00FF66' : 'transparent'}; color:${(u.plan || '').toUpperCase().includes('PREMIUM') || (u.plan || '').toUpperCase().includes('PARTNER') ? '#000' : '#94A3B8'};">
+                  👑 PREMIUM
+                </button>
+              </div>
+
+              <!-- Direct 1-Click Role Switcher Buttons (USER vs ADMIN) -->
+              <div style="display:flex; gap:4px; background:#090C12; padding:3px; border-radius:8px; border:1px solid #1E293B; width:fit-content;">
+                <button onclick="changeUserRole('${u.id}', 'USER')" style="cursor:pointer; border:none; padding:5px 10px; border-radius:6px; font-size:11px; font-weight:900; background:${u.role !== 'ADMIN' ? '#1E293B' : 'transparent'}; color:${u.role !== 'ADMIN' ? '#E2E8F0' : '#64748B'};">
+                  👤 USER (عضو)
+                </button>
+                <button onclick="changeUserRole('${u.id}', 'ADMIN')" style="cursor:pointer; border:none; padding:5px 10px; border-radius:6px; font-size:11px; font-weight:900; background:${u.role === 'ADMIN' ? '#FFE600' : 'transparent'}; color:${u.role === 'ADMIN' ? '#000' : '#94A3B8'};">
+                  👑 ADMIN (آدمن)
+                </button>
+              </div>
+            </div>
+          </td>
+          <td>
+            <strong style="color:#00FF66">$${Number(u.balance || 0).toLocaleString()}</strong>
+            <br><small style="color:#8A9BB4">مخاطرة: ${u.riskPercent || 1}%</small>
+          </td>
+          <td>
+            <strong>${u.totalChats || 0}</strong> رسالة
+            <br><small style="color:#FFE600">${u.totalTrades || 0} صفقة</small>
+          </td>
+          <td>
+            <button class="btn-toggle" style="background:rgba(0,229,255,0.12); border-color:#00E5FF; color:#00E5FF; font-weight:900; padding:8px 12px;" onclick="openBrainModal('${emailKey}', '${safeName}', '${handle}')">
+              🧠 اضغط لعرض ما تعلمه الذكاء
+            </button>
+          </td>
+          <td><span class="badge-status ${u.status === 'Active' ? 'status-active' : 'status-suspended'}">${u.status === 'Active' ? 'نشط 🟢' : 'محظور 🔴'}</span></td>
+          <td>
+            <div style="display:flex; gap:6px;">
+              <button class="btn-toggle" style="border-color:${u.status === 'Active' ? '#FF0055' : '#00FF66'}; color:${u.status === 'Active' ? '#FF4D88' : '#00FF66'};" onclick="toggleUser('${u.id}')">
+                ${u.status === 'Active' ? '🚫 بلوك / إيقاف' : '✅ فك الحظر'}
+              </button>
+              ${u.role !== 'ADMIN' ? `<button class="btn-toggle" style="border-color:#FF3355; color:#FF3355;" onclick="deleteUser('${u.id}')" title="حذف الحساب">🗑️</button>` : ''}
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    let lastRenderedUsersJson = '';
+
+    async function fetchStatus(forceRender = false) {
+      try {
+        const res = await fetch('/api/admin/status');
+        const data = await res.json();
+        document.getElementById('totalUsers').innerText = data.totalUsers || 0;
+        document.getElementById('activeSubscribers').innerText = data.activeSubscribers || 0;
+        const memMap = data.aiLearningMemory || {};
+        cachedUsers = data.users || [];
+        cachedMemMap = memMap;
+        document.getElementById('learnedCount').innerText = Object.keys(memMap).length;
+        document.getElementById('apiKeyStatus').innerText = data.hasApiKey
+          ? 'نشط 🟢 (' + data.apiKeyMasked + ')'
+          : 'غير مضبوط 🔴';
+
+        const supaBadge = document.getElementById('supaBadge');
+        const rlsBox = document.getElementById('rlsWarningBox');
+        const rep = data.supabaseSyncReport || {};
+        if (data.supabaseConnected) {
+          if (rep.rlsLocked) {
+            supaBadge.innerText = '⚠️ SUPABASE متصل لكن الجداول مقفلة بـ RLS (اضغط نسخ كود فتح القفل)';
+            supaBadge.style.borderColor = '#FF0055';
+            supaBadge.style.color = '#FF4D88';
+            if (rlsBox) rlsBox.style.display = 'block';
+          } else if (rep.ok) {
+            supaBadge.innerText = `☁️ SUPABASE CLOUD: متزامن لحظياً (${rep.syncedUsers || 0} أعضاء) 🟢`;
+            supaBadge.style.borderColor = '#00FF66';
+            supaBadge.style.color = '#00FF66';
+            if (rlsBox) rlsBox.style.display = 'none';
+          } else {
+            supaBadge.innerText = '☁️ SUPABASE CLOUD: متصل وجاهز للمزامنة 🟢';
+            supaBadge.style.borderColor = '#00E5FF';
+            supaBadge.style.color = '#00E5FF';
+            if (rlsBox) rlsBox.style.display = 'none';
+          }
+        } else {
+          supaBadge.innerText = '⚡ المحرك المحلي المنظم نشط (بانتظار ربط Supabase)';
+          supaBadge.style.borderColor = '#FFE600';
+          supaBadge.style.color = '#FFE600';
+          if (rlsBox) rlsBox.style.display = 'none';
+        }
+
+        const urlField = document.getElementById('supabaseUrlInput');
+        if (data.supabaseUrl && !urlField.value) {
+          urlField.value = data.supabaseUrl;
+        }
+
+        const currentUsersJson = JSON.stringify(cachedUsers);
+        if (forceRender || currentUsersJson !== lastRenderedUsersJson) {
+          lastRenderedUsersJson = currentUsersJson;
+          renderUsersTable();
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function saveConfiguration() {
+      const apiKey = document.getElementById('apiKeyInput').value;
+      const model = document.getElementById('modelSelect').value;
+      const supabaseUrl = document.getElementById('supabaseUrlInput').value;
+      const supabaseKey = document.getElementById('supabaseKeyInput').value;
+
+      const res = await fetch('/api/admin/update-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey, model, supabaseUrl, supabaseKey })
+      });
+      const d = await res.json();
+      if (d.success) {
+        if (d.supabaseSyncReport && d.supabaseSyncReport.rlsLocked) {
+          showToast('⚠️ الجداول مقفلة بـ RLS! انسخ كود فتح القفل بالأسفل');
+        } else {
+          showToast(d.supabaseConnected ? 'تم الحفظ ومزامنة البيانات مع Supabase بنجاح! ☁️✅' : 'تم حفظ الإعدادات وتحديث المحرك! 🚀');
+        }
+        fetchStatus();
+      }
+    }
+
+    async function forceSyncNow() {
+      const res = await fetch('/api/admin/sync-supabase', { method: 'POST' });
+      const d = await res.json();
+      if (d.success) {
+        showToast(`✅ تمت مزامنة ${d.report.syncedUsers} أعضاء وكل المحادثات إلى Supabase!`);
+      } else if (d.report && d.report.rlsLocked) {
+        showToast('⚠️ جداول Supabase مقفلة بـ RLS! اضغط زر نسخ كود فتح القفل');
+      } else {
+        showToast('⚠️ تعذرت المزامنة: ' + (d.report?.errorMessage || 'تأكد من المفاتيح'));
+      }
+      fetchStatus();
+    }
+
+    function copyRlsUnlockSql() {
+      const sql = `ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_learning_memory DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_conversations DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.community_messages DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.community_posts DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.system_settings DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE public.users, public.ai_learning_memory, public.user_conversations, public.community_messages, public.community_posts, public.system_settings TO anon, authenticated, service_role;`;
+      navigator.clipboard.writeText(sql);
+      showToast('📋 تم نسخ كود فتح قفل الجداول! الصقه في SQL Editor داخل Supabase واضغط RUN');
+    }
+
+    async function toggleUser(userId) {
+      await fetch('/api/admin/toggle-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+      });
+      showToast('⚡ تم تحديث حالة المشترك ومزامنة التطبيق فوراً!');
+      fetchStatus(true);
+    }
+
+    async function changeUserPlan(userId, plan) {
+      await fetch('/api/admin/change-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, plan })
+      });
+      showToast('⚡ تم تحديث الباقة إلى ' + plan + ' على شاشة المشترك وفي Supabase فوراً!');
+      fetchStatus(true);
+    }
+
+    async function changeUserRole(userId, role) {
+      await fetch('/api/admin/change-role', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, role })
+      });
+      showToast(role === 'ADMIN' ? '👑 تم منح صلاحيات الآدمن (ADMIN) لهذا الحساب ومزامنته مع Supabase فوراً!' : '👤 تم إرجاع الحساب إلى صلاحيات عضو عادي (USER) فوراً!');
+      fetchStatus(true);
+    }
+
+    async function deleteUser(userId) {
+      await fetch('/api/admin/delete-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+      });
+      showToast('🗑️ تم حذف الحساب من السيرفر ومن Supabase بنجاح');
+      fetchStatus(true);
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toastMsg');
+      t.innerText = msg;
+      t.style.display = 'block';
+      setTimeout(() => { t.style.display = 'none'; }, 2800);
+    }
+
+    // Run auth check on load
+    initAuth();
+  </script>
+</body>
+
+</html>

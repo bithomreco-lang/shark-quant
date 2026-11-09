@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" fill="none">
+  <!-- Glowing Gills -->
+  <path d="M 175,130 Q 185,152 196,168" stroke="#00FF66" stroke-width="3.5" stroke-linecap="round" />
+  <path d="M 185,127 Q 195,149 206,165" stroke="#00FF66" stroke-width="3.5" stroke-linecap="round" />
+  <path d="M 195,124 Q 205,146 216,162" stroke="#00FF66" stroke-width="3.5" stroke-linecap="round" />
+
+  <!-- Dorsal Fin Base -->
+  <path d="M 140,40 Q 170,-8 205,12 Q 190,38 178,45 Z" fill="#00FF66" stroke="#00FF66" stroke-width="2" />
+  <path d="M 148,38 Q 172,4 195,18 Q 184,36 172,42 Z" fill="#05140C" />
+
+  <!-- Main Shark Head Outer Silhouette -->
+  <path d="M 18,110 Q 55,50 120,28 Q 170,12 215,28 Q 185,42 180,68 Q 205,85 224,115 Q 198,132 170,138 Q 140,144 115,124 Q 70,122 18,110 Z"
+        fill="#06120B" stroke="#00FF66" stroke-width="4.5" stroke-linejoin="round" />
+
+  <!-- Snout & Aggressive Brow Contour -->
+  <path d="M 18,110 L 68,95 L 102,104 L 122,74 L 88,62 L 18,110 Z" fill="#0A2214" stroke="#00FF66" stroke-width="2.5" />
+
+  <!-- Fierce Predatory Eye Socket & Neon Glow Eye -->
+  <polygon points="98,62 122,65 116,77 92,70" fill="#000000" />
+  <polygon points="101,65 116,68 112,74 98,71" fill="#00FF66" />
+  <polygon points="105,67 112,69 109,72 103,70" fill="#FFFFFF" />
+
+  <!-- Open Jaws Maw (Deep Dark Cavity) -->
+  <path d="M 48,110 Q 98,115 132,122 Q 126,158 108,170 Q 72,158 48,146 Q 82,134 125,128 Q 85,122 48,110 Z" fill="#020804" />
+
+  <!-- ── UPPER JAW MONSTER FANGS (Razor Sharp White with Neon Outline) ── -->
+  <polygon points="44,110 51,130 58,111" fill="#FFFFFF" stroke="#00FF66" stroke-width="1.8" />
+  <polygon points="58,111 65,134 72,112" fill="#FFFFFF" stroke="#00FF66" stroke-width="1.8" />
+  <polygon points="72,112 82,139 91,114" fill="#FFFFFF" stroke="#00FF66" stroke-width="2" />
+  <polygon points="91,114 99,135 106,116" fill="#FFFFFF" stroke="#00FF66" stroke-width="1.8" />
+  <polygon points="106,116 113,132 120,119" fill="#FFFFFF" stroke="#00FF66" stroke-width="1.8" />
+  <polygon points="120,119 126,130 132,122" fill="#FFFFFF" stroke="#00FF66" stroke-width="1.8" />
+
+  <!-- Lower Jaw Structure -->
+  <path d="M 48,146 Q 84,164 114,182 Q 148,194 178,170 Q 155,188 108,200 Q 62,188 38,158 Q 41,150 48,146 Z"
+        fill="#0A2214" stroke="#00FF66" stroke-width="4.5" stroke-linejoin="round" />
+
+  <!-- ── LOWER JAW MONSTER FANGS (Pointing Upwards) ── -->
+  <polygon points="45,147 51,132 57,149" fill="#FFFFFF" stroke="#00FF66" stroke-width="1.8" />
+  <polygon points="57,149 64,128 71,151" fill="#FFFFFF" stroke="#00FF66" stroke-width="1.8" />
+  <polygon points="71,151 81,123 90,155" fill="#FFFFFF" stroke="#00FF66" stroke-width="2" />
+  <polygon points="90,155 98,131 105,160" fill="#FFFFFF" stroke="#00FF66" stroke-width="1.8" />
+  <polygon points="105,160 112,138 119,165" fill="#FFFFFF" stroke="#00FF66" stroke-width="1.8" />
+
+  <!-- Electric Neon Speed & Energy Accents -->
+  <path d="M 36,102 Q 78,52 142,32" stroke="#00FF66" stroke-width="3" stroke-linecap="round" />
+  <path d="M 66,162 Q 106,184 154,174" stroke="#00FF66" stroke-width="3.5" stroke-linecap="round" />
+  <path d="M 124,185 L 142,192" stroke="#00FF66" stroke-width="2.5" stroke-linecap="round" />
+</svg>
