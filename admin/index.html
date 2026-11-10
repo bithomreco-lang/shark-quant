@@ -54,7 +54,7 @@
       position: fixed;
       inset: 0;
       background: #06080C;
-      background-image: 
+      background-image:
         radial-gradient(circle at 50% 20%, rgba(255, 230, 0, 0.08) 0%, transparent 50%),
         radial-gradient(circle at 80% 80%, rgba(0, 229, 255, 0.05) 0%, transparent 40%);
       z-index: 999999;
@@ -77,8 +77,15 @@
     }
 
     @keyframes gatePop {
-      from { opacity: 0; transform: scale(0.95); }
-      to { opacity: 1; transform: scale(1); }
+      from {
+        opacity: 0;
+        transform: scale(0.95);
+      }
+
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
     }
 
     .gate-logo {
@@ -452,20 +459,16 @@
   <!-- ══════════════════════════════════════════════════════════════ -->
   <div id="adminAuthGateOverlay">
     <div class="gate-card">
-      <img src="/assets/shark_aggressive_logo.png" class="gate-logo" alt="Shark Quant" onerror="this.src='/assets/icon.png'">
+      <img src="/assets/shark_aggressive_logo.png" class="gate-logo" alt="Shark Quant"
+        onerror="this.src='/assets/icon.png'">
       <h2 class="gate-title">SHARK <span>QUANT</span></h2>
       <div class="gate-subtitle">RESTRICTED EXECUTIVE ADMIN TERMINAL</div>
 
       <div class="gate-input-wrapper">
-        <input 
-          type="password" 
-          id="adminPassInput" 
-          class="gate-input" 
-          placeholder="أدخل كلمة مرور الآدمن..." 
-          autocomplete="current-password"
-          autofocus
-        />
-        <button type="button" class="gate-toggle-eye" onclick="togglePassVisibility()" title="إظهار / إخفاء كلمة السر">👁️</button>
+        <input type="password" id="adminPassInput" class="gate-input" placeholder="أدخل كلمة مرور الآدمن..."
+          autocomplete="current-password" autofocus />
+        <button type="button" class="gate-toggle-eye" onclick="togglePassVisibility()"
+          title="إظهار / إخفاء كلمة السر">👁️</button>
       </div>
 
       <button type="button" class="gate-btn" onclick="submitAdminPass()">
@@ -508,7 +511,8 @@
       </div>
       <div class="stat-card">
         <div class="stat-title">حالة مفتاح الذكاء الاصطناعي (Gemini Live Key)</div>
-        <div class="stat-num" id="apiKeyStatus" style="font-size: 16px; margin-top: 6px; color: #FFE600;">Checking...</div>
+        <div class="stat-num" id="apiKeyStatus" style="font-size: 16px; margin-top: 6px; color: #FFE600;">Checking...
+        </div>
       </div>
     </div>
 
@@ -532,7 +536,8 @@
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
           <button class="btn-save btn-supa" style="flex:1;" onclick="saveConfiguration()">حفظ وتفعيل الربط مع SUPABASE
             ⚡</button>
-          <button class="btn-save" style="flex:1; background:#00FF66; color:#000;" onclick="forceSyncNow()">🔄 رفع ومزامنة
+          <button class="btn-save" style="flex:1; background:#00FF66; color:#000;" onclick="forceSyncNow()">🔄 رفع
+            ومزامنة
             كل الداتا الآن</button>
         </div>
         <div id="rlsWarningBox"
@@ -664,7 +669,7 @@
     }
 
     // Support ENTER key on input
-    document.getElementById('adminPassInput').addEventListener('keydown', function(e) {
+    document.getElementById('adminPassInput').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') {
         submitAdminPass();
       }
