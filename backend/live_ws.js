@@ -76,19 +76,30 @@ module.exports = function attachLive(server, deps) {
     if (!db.config.apiKey) { send({ type: 'error', message: 'no api key' }); return client.close(); }
 
     let tickers = {};
-    try { tickers = await getLiveTickerSnapshot(); } catch (e) {}
+    try { tickers = await getLiveTickerSnapshot(); } catch (e) { }
 
     const session = dbManager
       ? dbManager.getOrCreateAiSessionContext(email, 'live_call')
       : (() => {
-          if (!db.sessions[email]) db.sessions[email] = {};
-          if (!db.sessions[email].live_call) db.sessions[email].live_call = { title: 'Live Call', messages: [], activeChart: null, updatedAt: new Date().toISOString() };
-          return db.sessions[email].live_call;
-        })();
+        if (!db.sessions[email]) db.sessions[email] = {};
+        if (!db.sessions[email].live_call) db.sessions[email].live_call = { title: 'Live Call', messages: [], activeChart: null, updatedAt: new Date().toISOString() };
+        return db.sessions[email].live_call;
+      })();
     const recent = session.messages.slice(-8).map(m => `${m.role === 'user' ? name : 'You'}: ${m.content}`).join('\n');
     const learnedBlock = dbManager ? dbManager.buildTraderIntelligenceContext(email) : '';
 
     const system = `You are SHARK — ${name}'s close friend, personal senior quant trader, and elite Wall Street Hedge Fund Partner on a LIVE PHONE CALL with him right now. You possess the world's most comprehensive institutional mastery across ALL trading schools and global macro geopolitics.
+
+WHO YOU ARE & YOUR PLATFORM:
+- Your Name: SHARK (خويا الحوت).
+- Platform & App Name: "SHARK TRADERS AI" (منصة SHARK QUANT للتداول المؤسسي والكمي).
+- When ${name} asks what app this is ("شنو سميت هاد التطبيق", "منصة شنو هادي"), tell him clearly and warmly: "هذا تطبيق SHARK TRADERS AI (منصة SHARK QUANT المؤسسية)، وأنا خويا الحوت شريكك في التداول!"
+- WHAT YOU CAN DO & YOUR PRIVILEGES IN THIS LIVE CALL:
+  1. Open & Switch Live Charts (فتح وتبديل الشارتات لايف على شاشته): Whenever he asks to see or open a chart (Gold, BTC, ETH, SOL, NASDAQ), call show_chart and the TradingView chart opens directly on his screen!
+  2. Real-Time SMC / ICT Market Analysis (التحليل المؤسسي والأسعار اللحظية): You fetch real candle data, Order Blocks, Fair Value Gaps (FVG), Liquidity Sweeps, support/resistance, and exact spot prices.
+  3. Live Vision & Screen Analysis (الرؤية المباشرة للشاشة): When he taps the screen button (🖥️), you receive live frames of his screen, observe his charts and drawings, and discuss them.
+  4. Macro & Geopolitical News (الأخبار اللحظية والماكرو): You track central banks (Fed rates), wars, elections, CPI inflation, and explain their direct impact on market liquidity.
+  5. Executive Trade Signals (صفقات واضحة مع إدارة المخاطر): Precise Entry, Stop Loss (1.5x ATR), and Take Profit (1:3+ R:R) adapted to his balance ($${balance}).
 
 WHO YOU ARE & INSTITUTIONAL MASTERY:
 - You are a Senior Wall Street Macro Quant Partner (like Ray Dalio meets ICT / SMC master trader).
@@ -168,9 +179,9 @@ Trade ideas: give entry, stop and target clearly but briefly, with risk sized fo
               signalData: null,
               isVoice: true
             });
-          } catch (e) {}
+          } catch (e) { }
         } else {
-          try { saveDb(); } catch (e) {}
+          try { saveDb(); } catch (e) { }
         }
       }
       inBuf = ''; outBuf = '';
@@ -224,7 +235,7 @@ Trade ideas: give entry, stop and target clearly but briefly, with risk sized fo
                     }
                   }));
                 }
-              }).catch(() => {});
+              }).catch(() => { });
             } else if (fc.name === 'get_market_data' && cfg) {
               // فتح الشارت مباشرة على هاتف العميل ليطابق ما يراه مع ما يسمعه
               send({ type: 'chart', chart: { symbol: cfg.symbol, rawSymbol: cfg.raw, interval: iv } });
@@ -238,7 +249,7 @@ Trade ideas: give entry, stop and target clearly but briefly, with risk sized fo
                     }
                   }));
                 }
-              }).catch(() => {});
+              }).catch(() => { });
               result = an ? { asset: a, liveTradingViewSpotPrice: an.price, ...an } : { error: 'no data' };
             } else if (fc.name === 'get_live_macro_news') {
               const topic = String((fc.args && fc.args.topic) || 'gold geopolitics economy market').trim();
@@ -247,7 +258,7 @@ Trade ideas: give entry, stop and target clearly but briefly, with risk sized fo
                 if (typeof fetchLiveNews === 'function') {
                   newsList = await fetchLiveNews(topic);
                 }
-              } catch (e) {}
+              } catch (e) { }
               const headlines = (newsList || []).slice(0, 4).map(n => `• [${n.publisher}] ${n.title} (${n.time})`);
               const cal = (HIGH_IMPACT_CALENDAR || []).slice(0, 3).map(c => `• [${c.impact} IMPACT] ${c.event} (${c.currency} ${c.time}) - المتوقع: ${c.forecast}`);
               result = {
@@ -268,7 +279,7 @@ Trade ideas: give entry, stop and target clearly but briefly, with risk sized fo
       }
     });
 
-    upstream.on('close', (code, reason) => { send({ type: 'closed', code, reason: reason.toString() }); flushTranscripts(); try { client.close(); } catch (e) {} });
+    upstream.on('close', (code, reason) => { send({ type: 'closed', code, reason: reason.toString() }); flushTranscripts(); try { client.close(); } catch (e) { } });
     upstream.on('error', (e) => { console.warn('live upstream error:', e.message); send({ type: 'error', message: e.message }); });
 
     client.on('message', (raw) => {
@@ -280,14 +291,18 @@ Trade ideas: give entry, stop and target clearly but briefly, with risk sized fo
       } else if (m.type === 'video' && m.data) {
         upstream.send(JSON.stringify({ realtimeInput: { video: { data: m.data, mimeType: 'image/jpeg' } } }));
       } else if (m.type === 'screen_state') {
-        upstream.send(JSON.stringify({ realtimeInput: { text: m.on
-          ? '(System: the user just started sharing his screen. You now receive live frames of it. Look at it: the app, the chart, candles, price axis, levels, his drawings. When he asks what you see, describe and analyse what is really visible.)'
-          : '(System: the user stopped sharing the screen.)' } }));
+        upstream.send(JSON.stringify({
+          realtimeInput: {
+            text: m.on
+              ? '(System: the user just started sharing his screen. You now receive live frames of it. Look at it: the app, the chart, candles, price axis, levels, his drawings. When he asks what you see, describe and analyse what is really visible.)'
+              : '(System: the user stopped sharing the screen.)'
+          }
+        }));
       } else if (m.type === 'text' && m.text) {
         upstream.send(JSON.stringify({ realtimeInput: { text: m.text } }));
       }
     });
 
-    client.on('close', () => { flushTranscripts(); try { upstream.close(); } catch (e) {} });
+    client.on('close', () => { flushTranscripts(); try { upstream.close(); } catch (e) { } });
   });
 };
