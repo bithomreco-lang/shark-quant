@@ -1298,6 +1298,7 @@ export default function App() {
   const [callUserLiveText, setCallUserLiveText] = useState('');
   const [callStatusMessage, setCallStatusMessage] = useState('متصل على المباشر • سامعك دابا');
   const [callActiveChart, setCallActiveChart] = useState(null);
+  const [callActiveView, setCallActiveView] = useState(null);
   const [callMicMuted, setCallMicMuted] = useState(false);
   const [callSpeakerActive, setCallSpeakerActive] = useState(true);
   const [callScreenSharing, setCallScreenSharing] = useState(false);
@@ -1611,6 +1612,22 @@ export default function App() {
         break;
       case 'chart':
         setCallActiveChart(m.chart);
+        setCallActiveView({ type: 'chart', ...m.chart });
+        break;
+      case 'in_call_viewport':
+        if (m.viewType === 'chart') {
+          setCallActiveChart(m.chart);
+          setCallActiveView({ type: 'chart', ...m.chart });
+        } else if (m.viewType === 'web') {
+          setCallActiveChart(null);
+          setCallActiveView({
+            type: 'web',
+            url: m.url,
+            title: m.title,
+            summary: m.summary,
+            screenshotUrl: m.screenshotUrl
+          });
+        }
         break;
       case 'open_browser':
         setInAppBrowserUrl(m.url);
@@ -1771,6 +1788,7 @@ export default function App() {
     setLiveCallActive(true);
     setCallDuration(0);
     setCallActiveChart(null);
+    setCallActiveView(null);
     setCallUserLiveText('');
     setCallTranscript('');
     setCallMicMuted(false);
@@ -1813,6 +1831,7 @@ export default function App() {
     setIsAiSpeaking(false);
     isAiSpeakingRef.current = false;
     setCallActiveChart(null);
+    setCallActiveView(null);
     setCallDuration(0);
   };
 
@@ -6555,7 +6574,7 @@ export default function App() {
       {/* ── AUTONOMOUS LIVE VOICE PHONE CALL MODAL (WITH IN-CALL TRADINGVIEW) ── */}
       <Modal visible={liveCallActive} transparent animationType="slide">
         <View style={styles.callModalOverlay}>
-          <View style={[styles.callModalContainer, callActiveChart ? styles.callModalContainerExpanded : null]}>
+          <View style={[styles.callModalContainer, (callActiveChart || callActiveView) ? styles.callModalContainerExpanded : null]}>
             {/* 1. Call Header Bar */}
             <View style={styles.callTopRow}>
               <View style={styles.callStatusBadge}>
@@ -6570,14 +6589,64 @@ export default function App() {
               </View>
             </View>
 
-            {/* 2. IN-CALL TRADINGVIEW CHART (If active) or SHARK AVATAR */}
-            {callActiveChart ? (
+            {/* 2. IN-CALL TRADINGVIEW CHART, LIVE WEB VIEW, OR SHARK AVATAR */}
+            {callActiveView?.type === 'web' ? (
+              <View style={styles.inCallChartWrapper}>
+                <View style={styles.inCallChartHeader}>
+                  <View style={styles.inCallChartAssetInfo}>
+                    <View style={[styles.inCallChartLiveDot, { backgroundColor: '#00F0FF' }]} />
+                    <Text style={styles.inCallChartTitle} numberOfLines={1}>
+                      🌐 {callActiveView.title || 'LIVE WEB VIEW'}
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TouchableOpacity
+                      style={styles.browserExtBtn}
+                      onPress={() => openExternalLink(callActiveView.url)}
+                    >
+                      <Text style={styles.browserExtBtnText}>فتح خارجي ↗</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.inCallCloseChartBtn}
+                      onPress={() => setCallActiveView(null)}
+                    >
+                      <Ionicons name="close" size={16} color="#FF0055" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* AI Visual Vision On-Air Badge */}
+                <View style={styles.inCallVisionBadge}>
+                  <Text style={styles.inCallVisionBadgeText}>
+                    👁️ الحوت يرى ويحلل هذه الصفحة الآن بالذكاء البصري على المباشر
+                  </Text>
+                </View>
+
+                {/* Real High-Resolution Web Capture */}
+                {callActiveView.screenshotUrl ? (
+                  <View style={{ width: '100%', height: 380, backgroundColor: '#06080D', borderRadius: 8, overflow: 'hidden' }}>
+                    <Image
+                      source={{ uri: callActiveView.screenshotUrl.startsWith('/') ? BACKEND_URL + callActiveView.screenshotUrl : callActiveView.screenshotUrl }}
+                      style={{ width: '100%', height: '100%' }}
+                      resizeMode="contain"
+                    />
+                  </View>
+                ) : (
+                  <View style={{ width: '100%', height: 380, justifyContent: 'center', alignItems: 'center', backgroundColor: '#06080D', borderRadius: 8 }}>
+                    <Text style={{ fontSize: 32, marginBottom: 10 }}>🌐</Text>
+                    <Text style={{ color: '#00F0FF', fontWeight: '800', fontSize: 13, marginBottom: 4 }}>جاري جلب الصفحة بالكامل وتحليل الصورة...</Text>
+                    <Text style={{ color: '#8A9DB4', fontSize: 11 }}>{callActiveView.url}</Text>
+                  </View>
+                )}
+              </View>
+            ) : (callActiveChart || callActiveView?.type === 'chart') ? (
               <View style={styles.inCallChartWrapper}>
                 <View style={styles.inCallChartHeader}>
                   <View style={styles.inCallChartAssetInfo}>
                     <View style={styles.inCallChartLiveDot} />
                     <Text style={styles.inCallChartTitle}>
-                      {callActiveChart.rawSymbol || callActiveChart.symbol} • LIVE IN-CALL
+                      {(callActiveView?.rawSymbol || callActiveChart?.rawSymbol || callActiveChart?.symbol || 'CHART')} • LIVE IN-CALL
                     </Text>
                   </View>
 
@@ -6588,13 +6657,16 @@ export default function App() {
                         key={tf}
                         style={[
                           styles.inCallTfBtn,
-                          callActiveChart.interval === tf && styles.inCallTfBtnActive
+                          ((callActiveChart && callActiveChart.interval === tf) || (callActiveView && callActiveView.interval === tf)) && styles.inCallTfBtnActive
                         ]}
-                        onPress={() => setCallActiveChart((prev) => ({ ...prev, interval: tf }))}
+                        onPress={() => {
+                          setCallActiveChart((prev) => prev ? { ...prev, interval: tf } : { interval: tf });
+                          setCallActiveView((prev) => prev ? { ...prev, interval: tf } : null);
+                        }}
                       >
                         <Text style={[
                           styles.inCallTfBtnText,
-                          callActiveChart.interval === tf && styles.inCallTfBtnTextActive
+                          ((callActiveChart && callActiveChart.interval === tf) || (callActiveView && callActiveView.interval === tf)) && styles.inCallTfBtnTextActive
                         ]}>
                           {tf === '60' ? '1H' : tf === '240' ? '4H' : tf + 'M'}
                         </Text>
@@ -6602,7 +6674,7 @@ export default function App() {
                     ))}
                     <TouchableOpacity
                       style={styles.inCallCloseChartBtn}
-                      onPress={() => setCallActiveChart(null)}
+                      onPress={() => { setCallActiveChart(null); setCallActiveView(null); }}
                       accessibilityLabel="Close Chart"
                     >
                       <Ionicons name="close" size={16} color="#FF0055" />
@@ -6611,7 +6683,7 @@ export default function App() {
                 </View>
 
                 {/* The Embedded Live Chart */}
-                <LiveTradingViewChart symbol={callActiveChart.symbol} interval={callActiveChart.interval} />
+                <LiveTradingViewChart symbol={(callActiveView && callActiveView.symbol) || (callActiveChart && callActiveChart.symbol)} interval={(callActiveView && callActiveView.interval) || (callActiveChart && callActiveChart.interval) || '60'} />
               </View>
             ) : (
               <View style={styles.callAvatarWrapper}>
@@ -10059,6 +10131,25 @@ const styles = StyleSheet.create({
   inCallChartWrapper: {
     width: '100%',
     marginBottom: 12,
+  },
+  inCallVisionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 240, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 240, 255, 0.3)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginBottom: 8,
+    marginTop: 2,
+  },
+  inCallVisionBadgeText: {
+    color: '#00F0FF',
+    fontSize: 11,
+    fontWeight: '800',
+    textAlign: 'center',
+    width: '100%',
   },
   inCallChartHeader: {
     flexDirection: 'row',

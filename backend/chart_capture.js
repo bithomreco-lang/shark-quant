@@ -57,8 +57,52 @@ async function captureTradingViewScreenshot(symbol = 'OANDA:XAUUSD', interval = 
   return null;
 }
 
+async function captureWebScreenshot(url) {
+  if (!CHROME_PATH || !url) return null;
+  const safeName = String(url).replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40);
+  const filename = `web_${safeName}_${Date.now()}.jpg`;
+  const uploadsDir = path.join(__dirname, 'public', 'uploads');
+  if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+  const outPath = path.join(uploadsDir, filename);
+
+  let browser = null;
+  try {
+    browser = await puppeteer.launch({
+      executablePath: CHROME_PATH,
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-gpu', '--window-size=1280,820', '--disable-dev-shm-usage']
+    });
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 820 });
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 12000 });
+    await new Promise(r => setTimeout(r, 1500));
+    const buf = await page.screenshot({ type: 'jpeg', quality: 75 });
+    await browser.close();
+    browser = null;
+
+    if (buf && buf.length > 5000) {
+      fs.writeFileSync(outPath, buf);
+      return {
+        filePath: `/uploads/${filename}`,
+        base64: buf.toString('base64'),
+        mimeType: 'image/jpeg',
+        buffer: buf
+      };
+    }
+  } catch (err) {
+    console.warn('Web capture warning:', err.message);
+  } finally {
+    if (browser) {
+      try { await browser.close(); } catch (e) {}
+    }
+  }
+  return null;
+}
+
 module.exports = {
   CHROME_PATH,
-  captureTradingViewScreenshot
+  captureTradingViewScreenshot,
+  captureWebScreenshot
 };
 

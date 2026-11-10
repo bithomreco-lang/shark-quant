@@ -2,7 +2,7 @@
 // The API key never leaves the server.
 const WebSocket = require('ws');
 const { analyze } = require('./market_analysis');
-const { captureTradingViewScreenshot } = require('./chart_capture');
+const { captureTradingViewScreenshot, captureWebScreenshot } = require('./chart_capture');
 
 const LIVE_MODEL = 'models/gemini-3.8-live';
 const VOICE = 'Charon'; // deep, calm male voice
@@ -387,40 +387,56 @@ Trade ideas: give entry, stop and target clearly but briefly, with risk sized fo
                 recentCommunityDiscussions: formatted,
                 summary: 'Discussions fetched. Tell the user what fellow traders are chatting about.'
               };
-            } else if (fc.name === 'open_in_app_browser') {
+            } else if (fc.name === 'open_in_app_browser' || fc.name === 'browse_and_analyze_web') {
               let targetUrl = String(fc.args?.url || '').trim();
               if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
                 targetUrl = 'https://' + targetUrl;
               }
               const browserTitle = String(fc.args?.title || targetUrl.replace(/^https?:\/\//, '').split('/')[0]).trim();
-              const summary = String(fc.args?.summary || 'عرض الموقع بطلب منك').trim();
+              const summary = String(fc.args?.summary || 'عرض وتحليل فوري لصفحة الويب').trim();
+
+              // Send viewport switch to client right into the main in-call screen!
               send({
-                type: 'open_browser',
+                type: 'in_call_viewport',
+                viewType: 'web',
                 url: targetUrl,
                 title: browserTitle,
                 summary
               });
-              result = {
-                ok: true,
-                openedUrl: targetUrl,
-                title: browserTitle,
-                message: `In-app browser opened on user screen for ${browserTitle}`
-              };
-            } else if (fc.name === 'browse_and_analyze_web') {
-              let targetUrl = String(fc.args?.url || '').trim();
-              if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
-                targetUrl = 'https://' + targetUrl;
-              }
+
+              // Also capture high-res full visual snapshot using real headless Chrome
+              // and feed it directly into Gemini Live's visual eyes (mediaChunks) on-air!
+              captureWebScreenshot(targetUrl).then(cap => {
+                if (cap && cap.base64) {
+                  if (upstream.readyState === WebSocket.OPEN) {
+                    upstream.send(JSON.stringify({
+                      realtimeInput: {
+                        mediaChunks: [{ mimeType: 'image/jpeg', data: cap.base64 }]
+                      }
+                    }));
+                  }
+                  // Notify client of the crisp rendered screenshot
+                  send({
+                    type: 'in_call_viewport',
+                    viewType: 'web',
+                    url: targetUrl,
+                    title: browserTitle,
+                    summary,
+                    screenshotUrl: cap.filePath
+                  });
+                }
+              }).catch(() => {});
+
+              // Quick text extraction for immediate background context
               let extracted = '';
               try {
                 const fetchFn = typeof fetch !== 'undefined' ? fetch : require('node-fetch');
                 const ctl = new AbortController();
-                const to = setTimeout(() => ctl.abort(), 6000);
+                const to = setTimeout(() => ctl.abort(), 5000);
                 const r = await fetchFn(targetUrl, {
                   signal: ctl.signal,
                   headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                   }
                 });
                 clearTimeout(to);
@@ -431,24 +447,16 @@ Trade ideas: give entry, stop and target clearly but briefly, with risk sized fo
                   .replace(/<[^>]+>/g, ' ')
                   .replace(/\s+/g, ' ')
                   .trim()
-                  .substring(0, 3500);
-              } catch (webErr) {
-                extracted = `(Could not deeply scrape HTML directly: ${webErr.message}, but page is opened for user visual inspection)`;
-              }
-
-              // Also pop up the in-app browser so the user sees the page visually
-              send({
-                type: 'open_browser',
-                url: targetUrl,
-                title: targetUrl.replace(/^https?:\/\//, '').split('/')[0],
-                summary: 'تحليل مباشر لصفحة الويب'
-              });
+                  .substring(0, 3000);
+              } catch (e) {}
 
               result = {
                 ok: true,
                 url: targetUrl,
-                contentPreview: extracted,
-                directive: 'Summarize the most vital takeaways and market impacts for the user now in Darija.'
+                title: browserTitle,
+                pageText: extracted,
+                visualFedToEyes: true,
+                directive: 'You are now viewing the full visual screenshot and content of this page live. Analyze what you see for the user in Darija.'
               };
             } else if (fc.name === 'end_call') {
               hangupPending = true;
@@ -471,7 +479,7 @@ Trade ideas: give entry, stop and target clearly but briefly, with risk sized fo
       if (m.type === 'audio' && m.data) {
         upstream.send(JSON.stringify({ realtimeInput: { audio: { data: m.data, mimeType: 'audio/pcm;rate=16000' } } }));
       } else if (m.type === 'video' && m.data) {
-        upstream.send(JSON.stringify({ realtimeInput: { video: { data: m.data, mimeType: 'image/jpeg' } } }));
+        upstream.send(JSON.stringify({ realtimeInput: { mediaChunks: [{ mimeType: 'image/jpeg', data: m.data }] } }));
       } else if (m.type === 'screen_state') {
         upstream.send(JSON.stringify({ realtimeInput: { text: m.on
           ? '(System: the user just started sharing his screen. You now receive live frames of it. Look at it: the app, the chart, candles, price axis, levels, his drawings. When he asks what you see, describe and analyse what is really visible.)'
