@@ -97,24 +97,7 @@ namespace SharkTradersAI
                     catch { }
                 };
 
-                string targetUrl = "http://localhost:5000/app";
-                try
-                {
-                    using (var client = new System.Net.WebClient())
-                    {
-                        string ping = client.DownloadString("http://localhost:5000/api/admin/status");
-                        if (!string.IsNullOrEmpty(ping))
-                        {
-                            targetUrl = "http://localhost:5000/app";
-                        }
-                    }
-                }
-                catch
-                {
-                    targetUrl = "https://shark-quant-backend-auw2-blue.vercel.app/app";
-                }
-
-                webView.Source = new Uri(targetUrl);
+                webView.Source = new Uri("http://localhost:5000/app");
             }
             catch (Exception ex)
             {
@@ -127,21 +110,20 @@ namespace SharkTradersAI
             if (string.IsNullOrEmpty(url)) return;
             try
             {
-                // Open via Windows Shell — this uses default browser with active logged-in profile (bypasses profile picker!)
-                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-                return;
-            }
-            catch { }
-
-            try
-            {
                 string chrome = @"C:\Program Files\Google\Chrome\Application\chrome.exe";
                 if (!File.Exists(chrome)) chrome = @"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe";
 
                 if (File.Exists(chrome))
                 {
                     Process.Start(new ProcessStartInfo(chrome, "\"" + url + "\"") { UseShellExecute = false });
+                    return;
                 }
+            }
+            catch { }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
             }
             catch { }
         }

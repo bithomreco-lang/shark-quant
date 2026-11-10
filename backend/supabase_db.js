@@ -11,11 +11,9 @@ const AVATARS_DIR = path.join(UPLOADS_DIR, 'avatars');
 const AUDIO_DIR = path.join(UPLOADS_DIR, 'audio');
 
 for (const dir of [UPLOADS_DIR, AVATARS_DIR, AUDIO_DIR]) {
-  try {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-  } catch (err) { }
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
 }
 
 /**
@@ -115,49 +113,31 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
     lastAttemptAt: null
   };
 
-  const VERIFIED_FALLBACK_KEY = 'sb_publishable_MPI-lFS-ZRuopxnWXZGcbg_AwkhTSST';
-  const VERIFIED_SUPABASE_URL = 'https://krukhcmndvuklflxprvr.supabase.co';
-
   function initSupabaseClient() {
-    let url = (process.env.SUPABASE_URL || db.config.supabaseUrl || '').trim();
-    let key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || db.config.supabaseKey || '').trim();
-
-    // Auto-detect if user swapped URL and KEY or pasted backend URL or secret key into URL variable
-    if (!url || !url.includes('.supabase.co') || url.includes('vercel.app') || url.startsWith('sb_') || url.startsWith('ey')) {
-      url = VERIFIED_SUPABASE_URL;
-    }
-    // If key is broken, empty, or contaminated with domain
-    if (!key || key.includes('sb_secret__') || key.length < 20 || key.includes('vercel.app')) {
-      key = VERIFIED_FALLBACK_KEY;
-    }
-
-    db.config.supabaseUrl = url;
-    db.config.supabaseKey = key;
-
-    try {
-      supabase = createClient(url, key, {
-        auth: { persistSession: false }
-      });
-      console.log('⚡ Connected to Supabase PostgreSQL Cloud:', url);
-      return true;
-    } catch (err) {
-      console.warn('Supabase init error, falling back to verified key:', err.message);
+    const url = (process.env.SUPABASE_URL || db.config.supabaseUrl || '').trim();
+    const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || db.config.supabaseKey || '').trim();
+    if (url && key && url.startsWith('http')) {
       try {
-        supabase = createClient(VERIFIED_SUPABASE_URL, VERIFIED_FALLBACK_KEY, {
+        supabase = createClient(url, key, {
           auth: { persistSession: false }
         });
+        console.log('⚡ Connected to Supabase PostgreSQL Cloud:', url);
+        setTimeout(() => {
+          syncAllDataToSupabase().catch(() => {});
+        }, 500);
         return true;
-      } catch (e2) {
-        supabase = null;
-        return false;
+      } catch (err) {
+        console.warn('Supabase init error:', err.message);
       }
     }
+    supabase = null;
+    return false;
   }
 
   // Periodic background check: if RLS was locked earlier, retry automatically so the moment the user runs the SQL or updates the key, all data populates immediately!
   setInterval(() => {
     if (supabase && !lastSupabaseSyncReport.ok) {
-      syncAllDataToSupabase().catch(() => { });
+      syncAllDataToSupabase().catch(() => {});
     }
   }, 10000);
 
@@ -443,10 +423,6 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
   }
 
   // ── Save Clean Structured JSON & Push Async to Supabase if Configured ──
-  const actualDbPath = process.env.VERCEL
-    ? path.join('/tmp', 'database.json')
-    : (dbFilePath || path.join(__dirname, 'database.json'));
-
   let saveTimer = null;
   function saveDb() {
     syncAliases();
@@ -469,14 +445,12 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
           userConversations: db.userConversations,
           communityHub: db.communityHub
         };
-        try {
-          fs.writeFileSync(actualDbPath, JSON.stringify(cleanDiskSnapshot, null, 2));
-        } catch (fErr) {}
+        fs.writeFileSync(dbFilePath, JSON.stringify(cleanDiskSnapshot, null, 2));
         if (supabase) {
-          syncAllDataToSupabase().catch(() => { });
+          syncAllDataToSupabase().catch(() => {});
         }
       } catch (err) {
-        console.error('Error writing structured database:', err.message);
+        console.error('Error writing structured database.json:', err.message);
       }
     }, 150);
   }
@@ -484,126 +458,29 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
   // ── Load from Disk on Startup ──
   function loadDb() {
     try {
-      if (process.env.VERCEL && !fs.existsSync(actualDbPath)) {
-        if (fs.existsSync(dbFilePath)) {
-          try { fs.copyFileSync(dbFilePath, actualDbPath); } catch (e) {}
-        }
-      }
-      const fileToRead = fs.existsSync(actualDbPath) ? actualDbPath : dbFilePath;
-      if (fs.existsSync(fileToRead)) {
-        const rawText = fs.readFileSync(fileToRead, 'utf8');
+      if (fs.existsSync(dbFilePath)) {
+        const rawText = fs.readFileSync(dbFilePath, 'utf8');
         const parsed = JSON.parse(rawText);
         sanitizeAndMigrateExistingDb(parsed);
+        saveDb();
+      } else {
+        saveDb();
       }
     } catch (err) {
-      console.error('Error loading database, starting clean:', err.message);
+      console.error('Error loading database.json, starting clean:', err.message);
     }
     initSupabaseClient();
-  }
-
-  // ── Direct Supabase Cloud Queries (Rock-solid PostgreSQL persistence) ──
-  async function fetchUsersFromSupabase() {
-    if (!supabase) initSupabaseClient();
-    if (!supabase) return null;
-    try {
-      const { data, error } = await supabase.from('users').select('*').order('joined_at', { ascending: false });
-      if (error) {
-        console.warn('Supabase fetch users warning:', error.message);
-        return null;
-      }
-      if (data && Array.isArray(data)) {
-        return data.map(u => ({
-          id: u.id || ('usr_' + Buffer.from(u.email || '').toString('hex').slice(0, 8)),
-          email: u.email,
-          username: u.username || (u.email ? u.email.split('@')[0] : 'trader'),
-          name: u.name || u.username || 'Trader',
-          avatar: u.avatar || '',
-          plan: u.plan || 'FREE',
-          role: u.role || 'USER',
-          status: u.status || 'Active',
-          balance: Number(u.balance) || 0,
-          riskPercent: Number(u.risk_percent) || 1,
-          hasAcceptedCommunityRules: Boolean(u.has_accepted_rules),
-          totalChats: Number(u.total_chats) || 0,
-          totalTrades: Number(u.total_trades) || 0,
-          joinedAt: u.joined_at ? u.joined_at.split('T')[0] : '2026-11-10',
-          lastLoginAt: u.last_login_at || new Date().toISOString()
-        }));
-      }
-    } catch (e) {
-      console.warn('Supabase fetch users exception:', e.message);
-    }
-    return null;
-  }
-
-  async function updateUserPlanInSupabase(email, plan) {
-    if (!supabase) initSupabaseClient();
-    if (!supabase || !email) return false;
-    try {
-      const emailLower = email.trim().toLowerCase();
-      const { error } = await supabase.from('users').update({
-        plan: plan,
-        last_login_at: new Date().toISOString()
-      }).eq('email', emailLower);
-
-      if (error) {
-        console.error('Supabase updateUserPlanInSupabase error:', error.message);
-        return false;
-      }
-      console.log(`✅ Supabase plan saved permanently for ${emailLower} -> ${plan}`);
-      return true;
-    } catch (e) {
-      console.error('Supabase updateUserPlanInSupabase exception:', e.message);
-      return false;
-    }
-  }
-
-  async function updateUserRoleInSupabase(email, role) {
-    if (!supabase) initSupabaseClient();
-    if (!supabase || !email) return false;
-    try {
-      const emailLower = email.trim().toLowerCase();
-      const { error } = await supabase.from('users').update({ role }).eq('email', emailLower);
-      return !error;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  async function updateUserStatusInSupabase(email, status) {
-    if (!supabase) initSupabaseClient();
-    if (!supabase || !email) return false;
-    try {
-      const emailLower = email.trim().toLowerCase();
-      const { error } = await supabase.from('users').update({ status }).eq('email', emailLower);
-      return !error;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  async function deleteUserFromSupabase(email) {
-    if (!supabase) initSupabaseClient();
-    if (!supabase || !email) return false;
-    try {
-      const emailLower = email.trim().toLowerCase();
-      const { error } = await supabase.from('users').delete().eq('email', emailLower);
-      return !error;
-    } catch (e) {
-      return false;
-    }
   }
 
   // ── Cloud Sync Helpers (Non-blocking background sync to Supabase PostgreSQL) ──
   async function syncUserToSupabase(user) {
     if (!supabase || !user || !user.email) return;
     try {
-      const safeName = (user.name && user.name.trim()) || user.username || user.email.split('@')[0] || 'Trader';
       await supabase.from('users').upsert({
-        id: user.id || ('usr_' + Date.now()),
+        id: user.id,
         email: user.email.toLowerCase(),
-        name: safeName,
-        avatar: user.avatar || '',
+        name: user.name,
+        avatar: user.avatar,
         plan: user.plan || 'FREE',
         role: user.role || 'USER',
         status: user.status || 'Active',
@@ -659,7 +536,6 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
   }
 
   async function syncCommunityMessageToSupabase(msg) {
-    if (!supabase) initSupabaseClient();
     if (!supabase || !msg) return;
     try {
       await supabase.from('community_messages').upsert({
@@ -687,105 +563,6 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
     }
   }
 
-  async function updateMessageReactionsInSupabase(id, reactions, likedBy, likes) {
-    if (!supabase) initSupabaseClient();
-    if (!supabase || !id) return false;
-    try {
-      const { data: existing } = await supabase
-        .from('community_messages')
-        .select('signal_data')
-        .eq('id', id)
-        .limit(1);
-
-      const existingSignal = (existing && existing[0]?.signal_data) || {};
-      const updatedSignal = {
-        ...existingSignal,
-        reactions: reactions || { fire: [], target: [], rocket: [], blood: [] },
-        likedBy: Array.isArray(likedBy) ? likedBy : []
-      };
-
-      const { error } = await supabase
-        .from('community_messages')
-        .update({
-          likes: Number(likes) || (Array.isArray(likedBy) ? likedBy.length : 0),
-          signal_data: updatedSignal
-        })
-        .eq('id', id);
-
-      if (error) {
-        console.warn('Supabase update reactions error:', error.message);
-        return false;
-      }
-      return true;
-    } catch (e) {
-      console.warn('Supabase update reactions exception:', e.message);
-      return false;
-    }
-  }
-
-  async function fetchCommunityMessagesFromSupabase(limit = 100) {
-    if (!supabase) initSupabaseClient();
-    if (!supabase) return null;
-    try {
-      const { data, error } = await supabase
-        .from('community_messages')
-        .select('*')
-        .order('created_at', { ascending: true })
-        .limit(limit);
-      if (error) {
-        console.warn('Supabase fetch community messages warn:', error.message);
-        return null;
-      }
-      if (data && Array.isArray(data)) {
-        return data.map(m => {
-          const sig = m.signal_data || {};
-          const defaultReactions = { fire: [], target: [], rocket: [], blood: [] };
-          const reactions = (sig && typeof sig.reactions === 'object' && sig.reactions) ? sig.reactions : defaultReactions;
-          const likedBy = (sig && Array.isArray(sig.likedBy)) ? sig.likedBy : (reactions.fire || []);
-
-          return {
-            id: m.id,
-            senderEmail: m.sender_email,
-            senderUsername: m.sender_email ? m.sender_email.split('@')[0] : 'trader',
-            senderName: m.sender_name || 'Trader',
-            role: m.role || 'VIP TRADER',
-            isAdmin: Boolean(m.is_admin),
-            badge: m.badge || 'VIP',
-            tag: m.tag || '#DISCUSSION',
-            theme: m.theme || 'platinum',
-            type: m.type || 'CHAT',
-            category: m.category || 'NORMAL',
-            content: m.content || '',
-            signalData: m.signal_data || null,
-            audioData: m.audio_data || null,
-            audioDuration: m.audio_duration || null,
-            avatarText: m.avatar_text || 'TR',
-            time: m.time_label || '00:00',
-            likes: Number(m.likes) || likedBy.length || 0,
-            likedBy: likedBy,
-            reactions: reactions,
-            isPinned: Boolean(m.is_pinned),
-            createdAt: m.created_at
-          };
-        });
-      }
-    } catch (e) {
-      console.warn('Supabase fetch community messages exception:', e.message);
-    }
-    return null;
-  }
-
-  async function deleteCommunityMessageFromSupabase(id) {
-    if (!supabase) initSupabaseClient();
-    if (!supabase || !id) return false;
-    try {
-      const { error } = await supabase.from('community_messages').delete().eq('id', id);
-      return !error;
-    } catch (e) {
-      return false;
-    }
-  }
-
   async function syncAllDataToSupabase() {
     if (!supabase) {
       lastSupabaseSyncReport = {
@@ -804,41 +581,22 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
     lastSupabaseSyncReport.lastAttemptAt = new Date().toISOString();
 
     try {
-      // 1. Sync Users: Protect Supabase as Single Source of Truth
-      // Fetch latest users from Supabase so we never overwrite upgraded plans with stale local defaults!
-      const existingSupaUsers = await fetchUsersFromSupabase();
-      const supaUserMap = new Map();
-      if (existingSupaUsers && Array.isArray(existingSupaUsers)) {
-        for (const su of existingSupaUsers) {
-          if (su.email) supaUserMap.set(su.email.toLowerCase(), su);
-        }
-      }
-
-      const userRows = (db.users || []).map(user => {
-        const emailLower = (user.email || '').toLowerCase();
-        const fromSupa = supaUserMap.get(emailLower);
-        return {
-          id: user.id || fromSupa?.id,
-          email: emailLower,
-          username: fromSupa?.username || user.username || (emailLower ? emailLower.split('@')[0] : 'trader'),
-          name: fromSupa?.name || user.name || 'Trader',
-          avatar: fromSupa?.avatar || user.avatar || null,
-          plan: fromSupa?.plan || user.plan || 'FREE', // ALWAYS prioritize Supabase's upgraded plan!
-          role: fromSupa?.role || user.role || 'USER', // ALWAYS prioritize Supabase's role!
-          status: fromSupa?.status || user.status || 'Active',
-          balance: fromSupa?.balance !== undefined ? fromSupa.balance : (Number(user.balance) || 0),
-          risk_percent: fromSupa?.riskPercent !== undefined ? fromSupa.riskPercent : (Number(user.riskPercent) || 1),
-          has_accepted_rules: fromSupa?.hasAcceptedCommunityRules !== undefined ? fromSupa.hasAcceptedCommunityRules : Boolean(user.hasAcceptedCommunityRules),
-          total_chats: Math.max(fromSupa?.totalChats || 0, Number(user.totalChats) || 0),
-          total_trades: Math.max(fromSupa?.totalTrades || 0, Number(user.totalTrades) || 0),
-          last_login_at: fromSupa?.lastLoginAt || user.lastLoginAt || new Date().toISOString()
-        };
-      });
-
-      // Update in-memory db.users so it reflects Supabase's latest plans
-      if (existingSupaUsers && existingSupaUsers.length > 0) {
-        db.users = existingSupaUsers;
-      }
+      // 1. Sync Users
+      const userRows = (db.users || []).map(user => ({
+        id: user.id,
+        email: (user.email || '').toLowerCase(),
+        name: user.name || 'Trader',
+        avatar: user.avatar || null,
+        plan: user.plan || 'FREE',
+        role: user.role || 'USER',
+        status: user.status || 'Active',
+        balance: Number(user.balance) || 0,
+        risk_percent: Number(user.riskPercent) || 1,
+        has_accepted_rules: Boolean(user.hasAcceptedCommunityRules),
+        total_chats: Number(user.totalChats) || 0,
+        total_trades: Number(user.totalTrades) || 0,
+        last_login_at: user.lastLoginAt || new Date().toISOString()
+      }));
 
       lastSupabaseSyncReport.syncedUsers = userRows.length;
       if (userRows.length > 0) {
@@ -992,7 +750,7 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
         await supabase.from('users').delete().eq('email', emailLower);
         await supabase.from('ai_learning_memory').delete().eq('user_email', emailLower);
         await supabase.from('user_conversations').delete().eq('user_email', emailLower);
-      } catch (e) { }
+      } catch (e) {}
     }
     return removed;
   }
@@ -1035,22 +793,8 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
   }
 
   async function verifySupabaseOAuthToken(accessToken, desiredUsername = '') {
-    if (!supabase) initSupabaseClient();
     if (!supabase) throw new Error('Supabase غير متصل حالياً');
-
-    let { data, error } = await supabase.auth.getUser(accessToken);
-    if (error && (error.message.includes('API key') || error.message.includes('apiKey') || !data?.user)) {
-      console.warn('Supabase token verification retry with verified publishable key...');
-      try {
-        const fallbackClient = createClient(VERIFIED_SUPABASE_URL, VERIFIED_FALLBACK_KEY, { auth: { persistSession: false } });
-        const retry = await fallbackClient.auth.getUser(accessToken);
-        if (retry.data?.user) {
-          data = retry.data;
-          error = null;
-        }
-      } catch (fErr) {}
-    }
-
+    const { data, error } = await supabase.auth.getUser(accessToken);
     if (error || !data || !data.user || !data.user.email) {
       throw new Error(error?.message || 'فشل التحقق من جلسة جوجل عبر Supabase');
     }
@@ -1112,7 +856,7 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
           };
           db.users.push(user);
         }
-      } catch (e) { }
+      } catch (e) {}
     }
 
     if (username && username.trim()) {
@@ -1426,10 +1170,7 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
     loadDb,
     saveDb,
     initSupabaseClient,
-    isSupabaseConnected: () => {
-      if (!supabase) initSupabaseClient();
-      return Boolean(supabase);
-    },
+    isSupabaseConnected: () => Boolean(supabase),
     getSupabaseSyncReport: () => lastSupabaseSyncReport,
     syncAllDataToSupabase,
     deleteUserById,
@@ -1447,16 +1188,7 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
     buildTraderIntelligenceContext,
     syncUserConversations,
     getOrCreateAiSessionContext,
-    syncUserToSupabase,
-    fetchUsersFromSupabase,
-    updateUserPlanInSupabase,
-    updateUserRoleInSupabase,
-    updateUserStatusInSupabase,
-    deleteUserFromSupabase,
-    syncCommunityMessageToSupabase,
-    fetchCommunityMessagesFromSupabase,
-    updateMessageReactionsInSupabase,
-    deleteCommunityMessageFromSupabase
+    syncUserToSupabase
   };
 }
 

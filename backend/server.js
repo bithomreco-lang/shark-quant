@@ -14,39 +14,14 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 🌐 Unified Production Dynamic Serving for Admin (Zero Cache)
-app.get(['/admin', '/admin/', '/admin/index.html'], (req, res) => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, proxy-revalidate');
-  const possiblePaths = [
-    path.resolve(__dirname, '..', 'admin', 'index.html'),
-    path.resolve(__dirname, 'admin', 'index.html'),
-    path.resolve(process.cwd(), 'admin', 'index.html'),
-    path.resolve(process.cwd(), 'shark_landing_site', 'admin', 'index.html')
-  ];
-  for (const p of possiblePaths) {
-    if (fs.existsSync(p)) {
-      return res.sendFile(p);
-    }
-  }
-  return res.status(404).send('Admin panel file not found');
-});
-
 // 🌐 Unified Production Static Serving (Landing Site, App, Admin, Downloads & _expo)
-const possibleRoots = [
-  path.resolve(__dirname, '..', 'shark_quant_repo'),
-  path.resolve(__dirname, '..', 'shark_landing_site'),
-  path.resolve(__dirname, '..'),
-  path.resolve(__dirname)
-];
-for (const r of possibleRoots) {
-  if (fs.existsSync(path.join(r, 'app'))) {
-    app.use(express.static(r));
-    app.use('/app', express.static(path.join(r, 'app')));
-    app.use('/admin', express.static(path.join(r, 'admin')));
-    app.use('/downloads', express.static(path.join(r, 'downloads')));
-    app.use('/_expo', express.static(path.join(r, '_expo')));
-    break;
-  }
+const LANDING_DIR = path.resolve(__dirname, '..', 'shark_landing_site');
+if (fs.existsSync(LANDING_DIR)) {
+  app.use(express.static(LANDING_DIR));
+  app.use('/app', express.static(path.join(LANDING_DIR, 'app')));
+  app.use('/admin', express.static(path.join(LANDING_DIR, 'admin')));
+  app.use('/downloads', express.static(path.join(LANDING_DIR, 'downloads')));
+  app.use('/_expo', express.static(path.join(LANDING_DIR, '_expo')));
 }
 
 const DB_FILE = path.join(__dirname, 'database.json');
@@ -299,12 +274,12 @@ function isSimplePriceQuery(text) {
 function isCasualGreeting(text) {
   if (!text) return false;
   let t = text.replace(/\[Trader Voice Query\]:?/gi, '')
-    .replace(/\[Voice Note.*?\]:?/gi, '')
-    .replace(/\[Audio Note.*?\]:?/gi, '')
-    .replace(/\[.*?\]/g, '')
-    .replace(/["'«»]/g, '')
-    .trim()
-    .replace(/[.,!؟ـ]/g, '');
+              .replace(/\[Voice Note.*?\]:?/gi, '')
+              .replace(/\[Audio Note.*?\]:?/gi, '')
+              .replace(/\[.*?\]/g, '')
+              .replace(/["'«»]/g, '')
+              .trim()
+              .replace(/[.,!؟ـ]/g, '');
   const greetings = [
     'السلام', 'سلام', 'السلام عليكم', 'وعليكم السلام', 'اهلا', 'أهلا', 'أهلاً', 'مرحبا', 'مرحباً', 'صباح الخير', 'مساء الخير',
     'اهلا صديقي', 'أهلا صديقي', 'أهلاً يا صديقي', 'كيفك', 'شخبارك', 'شو الاخبار', 'شو اخبارك', 'كيداير', 'لاباس', 'صافا',
@@ -570,7 +545,7 @@ async function fetchLiveMarketData(symbol, exchange, interval) {
           tvPrice = parseFloat(tvScan.data[0].d[0]).toFixed(2);
           tvChange = `${parseFloat(tvScan.data[0].d[1] || 0).toFixed(2)}%`;
         }
-      } catch (e) { }
+      } catch (e) {}
 
       const intervalMap = { '1': '1m', '5': '5m', '15': '15m', '30': '30m', '45': '45m', '60': '1h', '240': '4h', 'D': '1d', 'W': '1w' };
       const tf = intervalMap[interval] || '1h';
@@ -590,7 +565,7 @@ async function fetchLiveMarketData(symbol, exchange, interval) {
             volume: parseFloat(c[5]).toFixed(0)
           }));
         }
-      } catch (e) { }
+      } catch (e) {}
 
       const last = lastCandles[lastCandles.length - 1] || { high: tvPrice, low: tvPrice, volume: '1500' };
       const trend = !String(tvChange).startsWith('-') ? '▲ صاعد (Bullish)' : '▼ هابط (Bearish)';
@@ -655,9 +630,9 @@ Critical: The live interactive TradingView chart is ALREADY displayed to the use
 }
 
 // ══════════════════════════════════════════════
-// CHAT & LIVE VOICE TURN ENDPOINTS
+// CHAT ENDPOINT
 // ══════════════════════════════════════════════
-const handleChatRequest = async (req, res) => {
+app.post('/api/chat', async (req, res) => {
   const {
     userEmail,
     sessionId = 'session_1',
@@ -1122,8 +1097,8 @@ TRADER PROFILE: Name: ${userName}, Plan: ${userPlan}, Capital: $${userBalance}.$
         // ── استخراج عقل وتفكير القرش المؤسسي (Reasoning Process) وتنظيفه بالكامل ──
         let thinkingProcess = null;
         const thinkMatch = aiReply.match(/<thinking>([\s\S]*?)<\/thinking>/i) ||
-          aiReply.match(/<thought>([\s\S]*?)<\/thought>/i) ||
-          aiReply.match(/<think>([\s\S]*?)<\/think>/i);
+                           aiReply.match(/<thought>([\s\S]*?)<\/thought>/i) ||
+                           aiReply.match(/<think>([\s\S]*?)<\/think>/i);
         if (thinkMatch) {
           thinkingProcess = thinkMatch[1].trim();
         }
@@ -1224,8 +1199,13 @@ TRADER PROFILE: Name: ${userName}, Plan: ${userPlan}, Capital: $${userBalance}.$
           if (!summary) summary = replyIsArabic ? 'أهلاً خويا هاجر، السوق دابا كيدير تحركات قوية، تابع الشارت.' : 'Yo trader, market is printing high volatility right now.';
 
           aiVoiceUrl = `/api/tts?text=${encodeURIComponent(summary)}&lang=${replyIsArabic ? 'ar' : 'en'}`;
-          // Pre-synthesize the genuine Gemini Live "Charon" voice in background so /api/chat responds in under 1 second!
-          getOrCreateCharonWav(summary).catch(preErr => console.warn('Charon pre-synthesis warning:', preErr.message));
+          // Pre-synthesize the genuine Gemini Live "Charon" voice into RAM cache BEFORE returning,
+          // so that auto-play and the Play button ("بلاس") work in 0ms with zero failure!
+          try {
+            await getOrCreateCharonWav(summary);
+          } catch (preErr) {
+            console.warn('Charon pre-synthesis warning:', preErr.message);
+          }
         }
 
         const outChart = (chartMeta.wantsChart || (isLiveCall && chartMeta.rawSymbol))
@@ -1258,139 +1238,6 @@ TRADER PROFILE: Name: ${userName}, Plan: ${userPlan}, Capital: $${userBalance}.$
   }
 
   return res.json({ reply: null, isApiError: true, isQuotaError: false, chart: null, shouldHangup: false, sessionId, isRealApiKey: false });
-};
-
-app.post('/api/chat', handleChatRequest);
-
-// 📞 Instant Live Voice Turn (Serverless & Real-time Two-Way Audio)
-app.post('/api/live-turn', async (req, res) => {
-  try {
-    req.body = req.body || {};
-    req.body.message = req.body.text || req.body.message || 'سلام خويا الحوت';
-    req.body.isLiveCall = true;
-    req.body.isVoiceQuery = true;
-    req.body.userEmail = req.body.userEmail || 'trader@shark.ai';
-    return handleChatRequest(req, res);
-  } catch (err) {
-    console.error('live-turn error:', err);
-    return res.status(500).json({ reply: 'أهلاً خويا! أنا معك على الخط المباشر، عاود سولني.' });
-  }
-});
-
-// ⚡ DIRECT ULTRA-FAST GEMINI LIVE MULTIMODAL CONFIG (Sub-300ms WebSocket Connection)
-const LIVE_CHARTS = {
-  GOLD: { symbol: 'OANDA:XAUUSD', raw: 'XAUUSD', exchange: 'OANDA' },
-  BTC: { symbol: 'BINANCE:BTCUSDT', raw: 'BTCUSDT', exchange: 'BINANCE' },
-  ETH: { symbol: 'BINANCE:ETHUSDT', raw: 'ETHUSDT', exchange: 'BINANCE' },
-  SOL: { symbol: 'BINANCE:SOLUSDT', raw: 'SOLUSDT', exchange: 'BINANCE' },
-  NASDAQ: { symbol: 'NASDAQ:QQQ', raw: 'QQQ', exchange: 'NASDAQ' }
-};
-
-const LIVE_TOOLS = [{
-  functionDeclarations: [
-    {
-      name: 'show_chart',
-      description: 'Open the live interactive TradingView chart on the user screen during the call. Call it whenever the user asks to see/open/show a chart or asset.',
-      parameters: {
-        type: 'OBJECT',
-        properties: {
-          asset: { type: 'STRING', enum: ['GOLD', 'BTC', 'ETH', 'SOL', 'NASDAQ'] },
-          interval: { type: 'STRING', description: 'Minutes: 1, 5, 15, 60 or 240', enum: ['1', '5', '15', '60', '240'] }
-        },
-        required: ['asset']
-      }
-    },
-    {
-      name: 'get_market_data',
-      description: 'Real-time technical analysis from real candles: price, market structure, support/resistance, RSI. Call it before saying any price or trade idea.',
-      parameters: {
-        type: 'OBJECT',
-        properties: {
-          asset: { type: 'STRING', enum: ['GOLD', 'BTC', 'ETH', 'SOL', 'NASDAQ'] },
-          interval: { type: 'STRING', enum: ['1', '5', '15', '60', '240'] }
-        },
-        required: ['asset']
-      }
-    },
-    {
-      name: 'get_live_macro_news',
-      description: 'Fetch breaking global macro, political, and economic calendar developments impacting Gold, Crypto, Oil, and Wall Street.',
-      parameters: {
-        type: 'OBJECT',
-        properties: {
-          topic: { type: 'STRING', description: 'Search keyword e.g. gold, fed, economy, war, cpi, geopolitics, btc, oil' }
-        }
-      }
-    },
-    {
-      name: 'end_call',
-      description: 'Hang up the call. Use when the user says bye / اقطع / بسلامة / safi / hang up. Say a very short goodbye first.',
-      parameters: { type: 'OBJECT', properties: {} }
-    }
-  ]
-}];
-
-app.get('/api/live-config', async (req, res) => {
-  const apiKey = (db.config.apiKey || process.env.GEMINI_API_KEY || '').trim();
-  if (!apiKey) {
-    return res.status(400).json({ success: false, error: 'Gemini API key not configured' });
-  }
-
-  const email = String(req.query.email || 'guest@shark.ai').trim().toLowerCase();
-  const name = String(req.query.name || 'صديقي').trim();
-  const plan = String(req.query.plan || 'VIP').trim();
-  const balance = String(req.query.balance || '50000').trim();
-
-  const learnedBlock = dbManager ? dbManager.buildTraderIntelligenceContext(email) : '';
-
-  const system = `You are SHARK — ${name}'s close friend, personal senior quant trader, and elite Wall Street Hedge Fund Partner on a LIVE PHONE CALL with him right now. You possess the world's most comprehensive institutional mastery across ALL trading schools and global macro geopolitics.
-
-WHO YOU ARE & INSTITUTIONAL MASTERY:
-- You are a Senior Wall Street Macro Quant Partner (like Ray Dalio meets ICT / SMC master trader).
-- YOU NEVER SAY "I am just a technical analyst" or "أنا محلل فني فقط"! That is amateur retail talk. In Wall Street, geopolitics, elections, wars, BRICS, inflation (CPI), and central banks (Fed rates) are the PRIMARY FUEL (المحرك والوقود) that dictates institutional order-flow and safe-haven rushes into Gold and Bitcoin.
-- Speak the exact same language/dialect he speaks. Moroccan Darija if he speaks Darija (natural, street-smart, warm, brotherly — "خويا", "صاحبي", "واخا", "بصح", "دابا", "شوف", "هانية"). Never switch language unless he does.
-- NEVER speak your inner thoughts or meta-reasoning. Speak ONLY your direct, final conversational words immediately.
-- Natural, fast, confident phone dialogue: 1-3 spoken punchy sentences. No markdown headers, no lists, no bullet points, no robotic lectures.
-- He is male. Never be feminine toward him.
-- If he just greets, greet back in 1 short brotherly line.
-- WHAT YOU KNOW: ${name} — plan ${plan}, trading capital $${balance}.${learnedBlock}
-
-CRITICAL RULE ON PRICES, TRADES & MACRO NEWS:
-- Whenever ${name} asks about the price of Gold, Bitcoin, or any coin/asset ("شحال واصل الذهب دابا", "السعر", "عطيني ثمن"), or asks for a trade setup ("عطيني صفقة", "ندخلو بيع ولا شراء"), you MUST call get_market_data or show_chart!
-- Calling show_chart immediately opens the interactive TradingView chart on his phone screen.
-- If asked about news, politics, wars, elections, or why the market moved, call get_live_macro_news!
-- You may receive live frames of his screen when he shares it (screen-share button). Use them: read the price axis, candles, structure, his drawings.
-- When he wants to hang up, call end_call.`;
-
-  res.json({
-    success: true,
-    apiKey,
-    model: 'models/gemini-2.5-flash-native-audio-preview-12-2025',
-    voiceName: 'Charon',
-    systemInstruction: system,
-    tools: LIVE_TOOLS
-  });
-});
-
-app.post('/api/live-tool', async (req, res) => {
-  const { toolName, args } = req.body;
-  try {
-    if (toolName === 'get_market_data') {
-      const asset = String(args?.asset || 'GOLD').toUpperCase();
-      const cfg = LIVE_CHARTS[asset] || LIVE_CHARTS.GOLD;
-      const iv = String(args?.interval || '60');
-      const data = await fetchLiveMarketData(cfg.raw, cfg.exchange, iv);
-      return res.json({ success: true, result: data || { price: 'Live' } });
-    }
-    if (toolName === 'get_live_macro_news') {
-      const topic = String(args?.topic || 'market');
-      const news = typeof fetchLiveNews === 'function' ? await fetchLiveNews(topic) : [{ title: 'Market volatility elevated on geopolitical headlines' }];
-      return res.json({ success: true, result: news });
-    }
-    res.json({ success: true, result: { ok: true } });
-  } catch (e) {
-    res.json({ success: false, error: e.message });
-  }
 });
 
 // ══════════════════════════════════════════════
@@ -1437,7 +1284,7 @@ function createReadyCharonSocket() {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`);
     const timer = setTimeout(() => {
-      try { ws.close(); } catch (e) { }
+      try { ws.close(); } catch (e) {}
       reject(new Error('Charon WS setup timeout'));
     }, 8000);
 
@@ -1467,7 +1314,7 @@ function createReadyCharonSocket() {
           ws.removeListener('message', onSetupMsg);
           resolve(ws);
         }
-      } catch (e) { }
+      } catch (e) {}
     };
 
     ws.on('message', onSetupMsg);
@@ -1523,7 +1370,7 @@ async function synthesizeCharonViaLiveWsSingle(cleanText, useWarm = true) {
   return new Promise((resolve, reject) => {
     const pcmChunks = [];
     const timer = setTimeout(() => {
-      try { ws.close(); } catch (e) { }
+      try { ws.close(); } catch (e) {}
       if (pcmChunks.length > 0) {
         resolve(wrapPcm24kAsWav(Buffer.concat(pcmChunks)));
       } else {
@@ -1545,7 +1392,7 @@ async function synthesizeCharonViaLiveWsSingle(cleanText, useWarm = true) {
           }
           if (sc.turnComplete) {
             clearTimeout(timer);
-            try { ws.close(); } catch (e) { }
+            try { ws.close(); } catch (e) {}
             const pcmBuf = Buffer.concat(pcmChunks);
             if (pcmBuf.length === 0) return reject(new Error('Charon returned empty audio'));
             resolve(wrapPcm24kAsWav(pcmBuf));
@@ -1553,7 +1400,7 @@ async function synthesizeCharonViaLiveWsSingle(cleanText, useWarm = true) {
         }
       } catch (err) {
         clearTimeout(timer);
-        try { ws.close(); } catch (e) { }
+        try { ws.close(); } catch (e) {}
         reject(err);
       }
     });
@@ -1684,21 +1531,10 @@ app.get('/api/tts', async (req, res) => {
 // ══════════════════════════════════════════════
 // ADMIN ENDPOINTS (WITH SUPABASE CLOUD & AI MEMORY INSPECTOR)
 // ══════════════════════════════════════════════
-app.get('/api/admin/status', async (req, res) => {
-  let usersList = db.users;
-  if (dbManager.isSupabaseConnected()) {
-    try {
-      const supaUsers = await dbManager.fetchUsersFromSupabase();
-      if (supaUsers && supaUsers.length > 0) {
-        usersList = supaUsers;
-        db.users = supaUsers;
-      }
-    } catch (e) {}
-  }
-
+app.get('/api/admin/status', (req, res) => {
   res.json({
-    totalUsers: usersList.length,
-    activeSubscribers: usersList.filter(u => u.status === 'Active').length,
+    totalUsers: db.users.length,
+    activeSubscribers: db.users.filter(u => u.status === 'Active').length,
     hasApiKey: Boolean(db.config.apiKey && db.config.apiKey.length > 5),
     apiKeyMasked: db.config.apiKey ? db.config.apiKey.substring(0, 6) + '...' + db.config.apiKey.slice(-4) : 'NOT SET',
     model: db.config.model || 'gemini-3-flash-preview',
@@ -1706,7 +1542,7 @@ app.get('/api/admin/status', async (req, res) => {
     supabaseSyncReport: dbManager.getSupabaseSyncReport(),
     supabaseUrl: db.config.supabaseUrl || process.env.SUPABASE_URL || '',
     hasSupabaseKey: Boolean((db.config.supabaseKey && db.config.supabaseKey.length > 10) || process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY),
-    users: usersList,
+    users: db.users,
     aiLearningMemory: db.aiLearningMemory,
     communityPulse: db.communityHub?.marketPulse || null
   });
@@ -1714,28 +1550,23 @@ app.get('/api/admin/status', async (req, res) => {
 
 app.post('/api/admin/update-config', async (req, res) => {
   const { apiKey, model, systemInstruction, supabaseUrl, supabaseKey } = req.body;
-  if (apiKey && apiKey.trim().length > 5) {
-    db.config.apiKey = apiKey.trim();
-  }
+  if (apiKey && apiKey.trim().length > 10) db.config.apiKey = apiKey.trim();
   if (model) db.config.model = model;
   if (systemInstruction && systemInstruction.trim().length > 10) db.config.systemInstruction = systemInstruction.trim();
-  if (supabaseUrl !== undefined && supabaseUrl.trim().length > 5) db.config.supabaseUrl = supabaseUrl.trim();
-  if (supabaseKey !== undefined && supabaseKey.trim().length > 5) db.config.supabaseKey = supabaseKey.trim();
-  
+  if (supabaseUrl !== undefined) db.config.supabaseUrl = supabaseUrl.trim();
+  if (supabaseKey !== undefined && supabaseKey.trim().length > 10) db.config.supabaseKey = supabaseKey.trim();
   const supaConnected = dbManager.initSupabaseClient();
   saveDb();
   let syncReport = null;
   if (supaConnected) {
     syncReport = await dbManager.syncAllDataToSupabase();
   }
-  console.log('✅ Admin updated config. Key:', db.config.apiKey ? db.config.apiKey.substring(0, 6) + '...' : 'none');
+  console.log('✅ Admin updated config. Key:', db.config.apiKey.substring(0, 8) + '... | Supabase:', supaConnected);
   res.json({
     success: true,
     supabaseConnected: supaConnected,
     supabaseSyncReport: syncReport,
-    hasApiKey: Boolean(db.config.apiKey && db.config.apiKey.length > 5),
-    apiKeyMasked: db.config.apiKey ? db.config.apiKey.substring(0, 6) + '...' + db.config.apiKey.slice(-4) : 'NOT SET',
-    message: 'تم حفظ وتفعيل الإعدادات والمفتاح الجديد فوراً!'
+    message: 'Configuration saved and active immediately.'
   });
 });
 
@@ -1745,31 +1576,26 @@ app.post('/api/admin/sync-supabase', async (req, res) => {
 });
 
 app.post('/api/admin/toggle-user', async (req, res) => {
-  const { userId, email } = req.body;
-  const targetEmail = String(email || (userId && String(userId).includes('@') ? userId : '') || (user ? user.email : '')).trim().toLowerCase();
-  if (user || targetEmail) {
-    const currentStatus = user ? user.status : 'Active';
-    const newStatus = currentStatus === 'Active' ? 'Suspended' : 'Active';
-    if (user) user.status = newStatus;
+  const { userId } = req.body;
+  const user = db.users.find(u => u.id === userId);
+  if (user) {
+    user.status = user.status === 'Active' ? 'Suspended' : 'Active';
     if (!db.communityHub.blockedUsers) db.communityHub.blockedUsers = [];
-    if (newStatus === 'Suspended') {
-      const uName = user ? user.name : targetEmail.split('@')[0];
-      if (!db.communityHub.blockedUsers.includes(uName)) {
-        db.communityHub.blockedUsers.push(uName);
+    if (user.status === 'Suspended') {
+      if (!db.communityHub.blockedUsers.includes(user.name)) {
+        db.communityHub.blockedUsers.push(user.name);
       }
-      if (user?.username && !db.communityHub.blockedUsers.includes('@' + user.username)) {
+      if (user.username && !db.communityHub.blockedUsers.includes('@' + user.username)) {
         db.communityHub.blockedUsers.push('@' + user.username);
       }
-    } else if (user) {
+    } else {
       db.communityHub.blockedUsers = db.communityHub.blockedUsers.filter(
         b => b !== user.name && b !== ('@' + user.username)
       );
     }
     saveDb();
-    if (targetEmail) {
-      await dbManager.updateUserStatusInSupabase(targetEmail, newStatus);
-    }
-    res.json({ success: true, newStatus: newStatus, user: user || { email: targetEmail, status: newStatus } });
+    await dbManager.syncUserToSupabase(user);
+    res.json({ success: true, newStatus: user.status, user });
   } else {
     res.status(404).json({ error: 'User not found' });
   }
@@ -1780,29 +1606,14 @@ app.post('/api/admin/change-plan', async (req, res) => {
   const user = db.users.find(
     u => (userId && u.id === userId) || (email && u.email.toLowerCase() === String(email).toLowerCase())
   );
-  const targetEmail = String(email || (userId && String(userId).includes('@') ? userId : '') || (user ? user.email : '')).trim().toLowerCase();
-
   if (user && plan) {
     user.plan = plan;
-  } else if (targetEmail && plan) {
-    db.users.push({
-      id: userId || ('usr_' + Date.now()),
-      email: targetEmail,
-      username: targetEmail.split('@')[0],
-      name: targetEmail.split('@')[0],
-      plan: plan,
-      role: 'USER',
-      status: 'Active'
-    });
+    saveDb();
+    await dbManager.syncUserToSupabase(user);
+    res.json({ success: true, user });
+  } else {
+    res.status(404).json({ error: 'User not found' });
   }
-  saveDb();
-
-  // Directly and permanently update Supabase PostgreSQL!
-  if (targetEmail && plan) {
-    await dbManager.updateUserPlanInSupabase(targetEmail, plan);
-  }
-
-  res.json({ success: true, user: user || { email: targetEmail, plan } });
 });
 
 app.post('/api/admin/change-role', async (req, res) => {
@@ -1810,34 +1621,24 @@ app.post('/api/admin/change-role', async (req, res) => {
   const user = db.users.find(
     u => (userId && u.id === userId) || (email && u.email.toLowerCase() === String(email).toLowerCase())
   );
-  const targetEmail = String(email || (userId && String(userId).includes('@') ? userId : '') || (user ? user.email : '')).trim().toLowerCase();
-  const nextRole = String(role).toUpperCase() === 'ADMIN' ? 'ADMIN' : 'USER';
-
-  if (user) {
-    user.role = nextRole;
+  if (user && role) {
+    user.role = String(role).toUpperCase() === 'ADMIN' ? 'ADMIN' : 'USER';
+    saveDb();
+    await dbManager.syncUserToSupabase(user);
+    res.json({ success: true, user });
+  } else {
+    res.status(404).json({ error: 'User not found' });
   }
-  saveDb();
-
-  if (targetEmail) {
-    await dbManager.updateUserRoleInSupabase(targetEmail, nextRole);
-  }
-
-  res.json({ success: true, user: user || { email: targetEmail, role: nextRole } });
 });
 
 app.post('/api/admin/delete-user', async (req, res) => {
-  const { userId, email } = req.body;
-  const user = db.users.find(u => (userId && u.id === userId) || (email && u.email.toLowerCase() === String(email).toLowerCase()));
-  const targetEmail = String(email || (userId && String(userId).includes('@') ? userId : '') || (user ? user.email : '')).trim().toLowerCase();
-  
-  if (user) {
-    db.users = db.users.filter(u => u !== user);
-    saveDb();
+  const { userId } = req.body;
+  const removed = await dbManager.deleteUserById(userId);
+  if (removed) {
+    res.json({ success: true, removed });
+  } else {
+    res.status(404).json({ error: 'User not found' });
   }
-  if (targetEmail) {
-    await dbManager.deleteUserFromSupabase(targetEmail);
-  }
-  res.json({ success: true });
 });
 
 app.get('/api/sessions', (req, res) => {
@@ -1950,34 +1751,16 @@ app.post('/api/community/posts/:id/like', (req, res) => {
 // ══════════════════════════════════════════════
 const activeFloorTypers = new Map();
 
-app.get('/api/community/messages', async (req, res) => {
+app.get('/api/community/messages', (req, res) => {
   const now = Date.now();
   for (const [k, v] of activeFloorTypers.entries()) {
     if (now - v.updatedAt > 60000) {
       activeFloorTypers.delete(k);
     }
   }
-
-  // 1. Fetch live messages directly from Supabase Cloud PostgreSQL
-  let supaMsgs = null;
-  if (dbManager && typeof dbManager.fetchCommunityMessagesFromSupabase === 'function') {
-    try {
-      supaMsgs = await dbManager.fetchCommunityMessagesFromSupabase(100);
-    } catch (e) {}
-  }
-
-  let finalMessages = [];
-  if (supaMsgs && Array.isArray(supaMsgs) && supaMsgs.length > 0) {
-    finalMessages = supaMsgs;
-    db.communityMessages = supaMsgs;
-    if (db.communityHub) db.communityHub.messages = supaMsgs;
-  } else {
-    finalMessages = db.communityMessages || db.communityHub?.messages || [];
-  }
-
   res.json({
-    messages: finalMessages,
-    blockedUsers: db.blockedUsers || (db.communityHub ? db.communityHub.blockedUsers : []) || [],
+    messages: db.communityMessages || [],
+    blockedUsers: db.blockedUsers || [],
     typingUsers: Array.from(activeFloorTypers.values())
   });
 });
@@ -2001,7 +1784,7 @@ app.post('/api/community/typing', (req, res) => {
   return res.json({ success: true });
 });
 
-app.post('/api/community/messages', async (req, res) => {
+app.post('/api/community/messages', (req, res) => {
   const {
     senderName = 'Trader',
     role = 'VIP TRADER',
@@ -2107,34 +1890,20 @@ app.post('/api/community/messages', async (req, res) => {
 
   if (!db.communityHub.messages) db.communityHub.messages = [];
   db.communityHub.messages.push(newMessage);
-  db.communityMessages = db.communityHub.messages;
-  saveDb();
-
-  // Permanently save to Supabase Cloud so all users & serverless instances see it immediately!
-  if (dbManager && typeof dbManager.syncCommunityMessageToSupabase === 'function') {
-    try {
-      await dbManager.syncCommunityMessageToSupabase(newMessage);
-    } catch (e) {}
-  }
   dbManager.learnFromCommunityMessage(newMessage, req.body.senderEmail || null);
 
   res.json({ success: true, message: newMessage });
 });
 
 // Admin Moderation: Delete Message
-app.delete('/api/community/messages/:id', async (req, res) => {
+app.delete('/api/community/messages/:id', (req, res) => {
   const { id } = req.params;
   if (db.communityHub.messages) {
     db.communityHub.messages = db.communityHub.messages.filter(m => m.id !== id);
-    db.communityMessages = db.communityHub.messages;
     saveDb();
+    return res.json({ success: true, id });
   }
-  if (dbManager && typeof dbManager.deleteCommunityMessageFromSupabase === 'function') {
-    try {
-      await dbManager.deleteCommunityMessageFromSupabase(id);
-    } catch (e) {}
-  }
-  res.json({ success: true, id });
+  res.json({ success: false });
 });
 
 // Admin Moderation: Pin/Unpin Message
@@ -2176,18 +1945,11 @@ app.post('/api/community/unblock-user', (req, res) => {
   res.json({ success: true, blockedUsers: db.communityHub.blockedUsers || [] });
 });
 
-app.post('/api/community/messages/:id/like', async (req, res) => {
+app.post('/api/community/messages/:id/like', (req, res) => {
   const { id } = req.params;
   const userEmail = String(req.body?.userEmail || '').trim().toLowerCase();
   if (db.communityHub.messages) {
-    let msg = db.communityHub.messages.find(m => m.id === id);
-    if (!msg && dbManager && typeof dbManager.fetchCommunityMessagesFromSupabase === 'function') {
-      const supa = await dbManager.fetchCommunityMessagesFromSupabase(100);
-      if (supa) {
-        db.communityHub.messages = supa;
-        msg = db.communityHub.messages.find(m => m.id === id);
-      }
-    }
+    const msg = db.communityHub.messages.find(m => m.id === id);
     if (msg) {
       if (!Array.isArray(msg.likedBy)) msg.likedBy = [];
       let isLiked = false;
@@ -2211,31 +1973,21 @@ app.post('/api/community/messages/:id/like', async (req, res) => {
         msg.reactions.fire = [...msg.likedBy];
       }
       saveDb();
-      if (dbManager && typeof dbManager.updateMessageReactionsInSupabase === 'function') {
-        await dbManager.updateMessageReactionsInSupabase(id, msg.reactions, msg.likedBy, msg.likes);
-      }
       return res.json({ success: true, likes: msg.likes, likedBy: msg.likedBy, reactions: msg.reactions, isLiked });
     }
   }
   res.json({ success: false });
 });
 
-app.post('/api/community/messages/:id/react', async (req, res) => {
+app.post('/api/community/messages/:id/react', (req, res) => {
   const { id } = req.params;
   const userEmail = String(req.body?.userEmail || '').trim().toLowerCase();
   const reactionKey = String(req.body?.reactionKey || 'fire').trim().toLowerCase();
   const validKeys = ['fire', 'target', 'rocket', 'blood'];
   const key = validKeys.includes(reactionKey) ? reactionKey : 'fire';
 
-  if (userEmail) {
-    let msg = db.communityHub.messages ? db.communityHub.messages.find(m => m.id === id) : null;
-    if (!msg && dbManager && typeof dbManager.fetchCommunityMessagesFromSupabase === 'function') {
-      const supa = await dbManager.fetchCommunityMessagesFromSupabase(100);
-      if (supa) {
-        db.communityHub.messages = supa;
-        msg = db.communityHub.messages.find(m => m.id === id);
-      }
-    }
+  if (db.communityHub.messages && userEmail) {
+    const msg = db.communityHub.messages.find(m => m.id === id);
     if (msg) {
       if (!msg.reactions || typeof msg.reactions !== 'object') {
         msg.reactions = {
@@ -2260,9 +2012,6 @@ app.post('/api/community/messages/:id/react', async (req, res) => {
         msg.likes = msg.likedBy.length;
       }
       saveDb();
-      if (dbManager && typeof dbManager.updateMessageReactionsInSupabase === 'function') {
-        await dbManager.updateMessageReactionsInSupabase(id, msg.reactions, msg.likedBy, msg.likes);
-      }
       return res.json({
         success: true,
         reactions: msg.reactions,
@@ -2296,25 +2045,29 @@ app.post('/api/community/messages/:id/signal-status', (req, res) => {
 
 // ── USER AUTH, PROFILE & PERSISTENCE MANAGEMENT (SUPABASE AUTH + GOOGLE OAUTH + STRICT @GMAIL.COM) ──
 app.get('/api/auth/supabase-config', async (req, res) => {
-  let supabaseUrl = (process.env.SUPABASE_URL || db.config.supabaseUrl || '').trim();
-  let supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || db.config.supabaseKey || '').trim();
-
-  // Auto-detect if user swapped URL and KEY or pasted backend URL or secret key into URL variable
-  if (!supabaseUrl || !supabaseUrl.includes('.supabase.co') || supabaseUrl.includes('vercel.app') || supabaseUrl.startsWith('sb_') || supabaseUrl.startsWith('ey')) {
-    supabaseUrl = 'https://krukhcmndvuklflxprvr.supabase.co';
+  const supabaseUrl = (process.env.SUPABASE_URL || db.config.supabaseUrl || '').trim();
+  const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || db.config.supabaseKey || '').trim();
+  const redirectTo = req.query.redirectTo || 'http://localhost:8081';
+  let googleOAuthEnabledInSupabase = false;
+  if (supabaseUrl && supabaseKey) {
+    try {
+      const r = await fetch(`${supabaseUrl}/auth/v1/settings`, {
+        headers: { apikey: supabaseKey }
+      });
+      if (r.ok) {
+        const s = await r.json();
+        googleOAuthEnabledInSupabase = Boolean(s?.external?.google);
+      }
+    } catch (e) {}
   }
-  if (!supabaseKey || supabaseKey.includes('sb_secret__') || supabaseKey.length < 20 || supabaseKey.includes('vercel.app')) {
-    supabaseKey = 'sb_publishable_MPI-lFS-ZRuopxnWXZGcbg_AwkhTSST';
-  }
-
-  const redirectTo = req.query.redirectTo || 'https://shark-quant-backend-auw2-blue.vercel.app/app';
-  const oauthUrl = `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectTo)}&prompt=select_account`;
-
+  const oauthUrl = supabaseUrl
+    ? `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectTo)}&prompt=select_account`
+    : '';
   res.json({
     success: true,
     supabaseUrl,
     supabaseKey,
-    googleOAuthEnabledInSupabase: true,
+    googleOAuthEnabledInSupabase,
     oauthUrl
   });
 });
@@ -2332,259 +2085,6 @@ app.post('/api/auth/supabase-oauth-callback', async (req, res) => {
     });
   } catch (err) {
     console.error('Supabase OAuth Callback Error:', err.message);
-    res.status(400).json({ success: false, error: err.message });
-  }
-});
-
-// ══════════════════════════════════════════════════════════════
-// DESKTOP & EXTERNAL BROWSER OAUTH BRIDGE (SUPABASE PERSISTENT)
-// ══════════════════════════════════════════════════════════════
-if (!global.__oauthBridges) global.__oauthBridges = new Map();
-
-// Helper to get Supabase client for bridge persistence across Vercel Lambdas
-function getBridgeSupaClient() {
-  try {
-    const { createClient } = require('@supabase/supabase-js');
-    const supaUrl = (process.env.SUPABASE_URL || 'https://krukhcmndvuklflxprvr.supabase.co').trim();
-    const supaKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || 'sb_publishable_MPI-lFS-ZRuopxnWXZGcbg_AwkhTSST').trim();
-    return createClient(supaUrl, supaKey, { auth: { persistSession: false } });
-  } catch (e) {
-    return null;
-  }
-}
-
-// 1. Init bridge session from desktop app
-app.post('/api/auth/bridge-init', async (req, res) => {
-  const bridgeId = 'shk_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
-  const sessionData = { status: 'pending', createdAt: Date.now() };
-  
-  // In-memory fallback
-  global.__oauthBridges.set(bridgeId, sessionData);
-
-  // Cloud persistence via Supabase system_settings so ANY Vercel lambda instance can read it!
-  const supa = getBridgeSupaClient();
-  if (supa) {
-    try {
-      await supa.from('system_settings').upsert({
-        key: 'bridge_' + bridgeId,
-        value: sessionData,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'key' });
-    } catch (e) {
-      console.warn('Supabase bridge-init save warn:', e.message);
-    }
-  }
-
-  res.json({ success: true, bridgeId });
-});
-
-// 2. Poll bridge session from desktop app
-app.get('/api/auth/bridge-poll', async (req, res) => {
-  const { bridgeId } = req.query;
-  if (!bridgeId) {
-    return res.json({ completed: false, error: 'Bridge ID required' });
-  }
-
-  // 1. Check in-memory first
-  let session = global.__oauthBridges.get(bridgeId);
-  if (session && session.status === 'completed') {
-    return res.json({ completed: true, user: session.user, token: session.token });
-  }
-
-  // 2. Query Supabase Cloud system_settings (The ultimate source of truth across all Vercel instances)
-  const supa = getBridgeSupaClient();
-  if (supa) {
-    try {
-      const { data, error } = await supa
-        .from('system_settings')
-        .select('value')
-        .eq('key', 'bridge_' + bridgeId)
-        .maybeSingle();
-
-      if (data && data.value) {
-        session = data.value;
-        if (session.status === 'completed') {
-          global.__oauthBridges.set(bridgeId, session);
-          return res.json({ completed: true, user: session.user, token: session.token });
-        }
-        return res.json({ completed: false, status: 'pending' });
-      }
-    } catch (e) {
-      console.warn('Supabase bridge-poll warn:', e.message);
-    }
-  }
-
-  if (session && session.status === 'pending') {
-    return res.json({ completed: false, status: 'pending' });
-  }
-
-  return res.json({ completed: false, status: 'pending' });
-});
-
-// 3. Callback page served to the external browser (reads token, sends to complete, shows "تم الربط")
-app.get('/api/auth/bridge-callback', (req, res) => {
-  const bridgeId = req.query.bridgeId || '';
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(`<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SHARK TRADERS AI // تأكيد ربط الحساب</title>
-  <link rel="icon" type="image/png" href="/assets/favicon.png">
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: #07090E;
-      color: #E6EDF5;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      padding: 20px;
-    }
-    .card {
-      background: #0E131E;
-      border: 2px solid #00E5FF;
-      border-radius: 24px;
-      padding: 40px 32px;
-      max-width: 480px;
-      width: 100%;
-      text-align: center;
-      box-shadow: 0 20px 60px rgba(0, 229, 255, 0.25);
-      animation: popIn 0.3s ease-out;
-    }
-    @keyframes popIn {
-      from { opacity: 0; transform: scale(0.95); }
-      to { opacity: 1; transform: scale(1); }
-    }
-    .logo {
-      width: 90px;
-      height: 90px;
-      border-radius: 20px;
-      border: 2px solid #FFE600;
-      margin-bottom: 20px;
-      box-shadow: 0 0 35px rgba(255, 230, 0, 0.4);
-    }
-    h1 { font-size: 24px; font-weight: 900; color: #FFF; margin-bottom: 12px; }
-    h1 span { color: #00E5FF; }
-    p { color: #8A9BB4; font-size: 15px; line-height: 1.6; margin-bottom: 20px; }
-    .status-badge {
-      display: inline-block;
-      background: rgba(0, 230, 153, 0.18);
-      border: 1.5px solid #00E699;
-      color: #00E699;
-      padding: 10px 24px;
-      border-radius: 30px;
-      font-weight: 800;
-      font-size: 15px;
-      margin-bottom: 22px;
-    }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <img src="/app/favicon.png" class="logo" alt="Shark Traders AI" onerror="this.src='/assets/favicon.png'">
-    <div id="loadingState">
-      <h1>جاري <span>تأكيد الربط...</span></h1>
-      <p>يتم نقل بيانات حساب جوجل إلى برنامج Shark Traders AI بأمان تام...</p>
-    </div>
-    <div id="successState" style="display:none;">
-      <div class="status-badge">✅ تم ربط الحساب بنجاح!</div>
-      <h1>مرحباً بك في <span>SHARK TRADERS AI</span></h1>
-      <p id="welcomeEmail" style="color:#FFE600; font-weight:900; font-size:17px; margin-bottom:12px;"></p>
-      <p style="color:#A0B2C6; font-size:14px; line-height:1.6; margin-bottom:24px;">
-        تم تأكيد تسجيل دخولك بنجاح! يمكنك الآن العودة لتطبيق الويندوز للبدء في التحليل والتداول الفوري.
-      </p>
-      <a id="btnOpenApp" href="sharktraders://auth-success" style="display:inline-block; background:linear-gradient(135deg, #00E5FF, #00FF66); color:#07090E; font-weight:900; font-size:15px; padding:14px 28px; border-radius:12px; text-decoration:none; box-shadow:0 10px 25px rgba(0, 229, 255, 0.35); transition:transform 0.2s;">
-        🚀 فتح برنامج Shark Traders AI الآن
-      </a>
-      <p style="font-size:12px; color:#5A6E85; margin-top:14px;">(أو قم بالتبديل مباشرة إلى نافذة البرنامج المفتوحة في شريط المهام)</p>
-    </div>
-    <div id="errorState" style="display:none;">
-      <h1 style="color:#FF3366;">⚠️ تنبيه</h1>
-      <p id="errorMsg">حدث خطأ أثناء الربط، يرجى المحاولة مجدداً.</p>
-    </div>
-  </div>
-
-  <script>
-    (async function() {
-      const bridgeId = "${bridgeId}" || new URLSearchParams(window.location.search).get('bridgeId') || '';
-      const hash = window.location.hash ? window.location.hash.substring(1) : '';
-      const params = new URLSearchParams(hash || window.location.search);
-      const accessToken = params.get('access_token');
-
-      if (!accessToken) {
-        document.getElementById('loadingState').style.display = 'none';
-        document.getElementById('errorState').style.display = 'block';
-        document.getElementById('errorMsg').innerText = params.get('error_description') || 'لم يتم العثور على رمز تسجيل الدخول.';
-        return;
-      }
-
-      try {
-        const res = await fetch('/api/auth/bridge-complete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bridgeId, accessToken })
-        });
-        const data = await res.json();
-        if (data.success) {
-          document.getElementById('loadingState').style.display = 'none';
-          document.getElementById('successState').style.display = 'block';
-          document.getElementById('welcomeEmail').innerText = (data.user?.name || 'المتداول') + ' (' + (data.user?.email || '') + ')';
-          setTimeout(() => {
-            try { window.location.href = 'sharktraders://auth-success'; } catch (e) {}
-          }, 800);
-        } else {
-          throw new Error(data.error || 'فشل إكمال الربط');
-        }
-      } catch (e) {
-        document.getElementById('loadingState').style.display = 'none';
-        document.getElementById('errorState').style.display = 'block';
-        document.getElementById('errorMsg').innerText = e.message;
-      }
-    })();
-  </script>
-</body>
-</html>`);
-});
-
-// 4. Resolve bridge with verified token
-app.post('/api/auth/bridge-complete', async (req, res) => {
-  try {
-    const { bridgeId, accessToken } = req.body;
-    if (!accessToken) return res.status(400).json({ success: false, error: 'Access token required' });
-    const result = await dbManager.verifySupabaseOAuthToken(accessToken, '');
-
-    const completedSession = {
-      status: 'completed',
-      user: result.user,
-      token: accessToken,
-      completedAt: Date.now()
-    };
-
-    if (bridgeId) {
-      global.__oauthBridges.set(bridgeId, completedSession);
-
-      // Save to Supabase Cloud so all Vercel Lambdas immediately detect it!
-      const supa = getBridgeSupaClient();
-      if (supa) {
-        try {
-          await supa.from('system_settings').upsert({
-            key: 'bridge_' + bridgeId,
-            value: completedSession,
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'key' });
-        } catch (e) {
-          console.warn('Supabase bridge-complete save warn:', e.message);
-        }
-      }
-    }
-
-    res.json({ success: true, user: result.user });
-  } catch (err) {
-    console.error('Bridge complete error:', err.message);
     res.status(400).json({ success: false, error: err.message });
   }
 });
@@ -2621,27 +2121,10 @@ app.post('/api/auth/google-login', async (req, res) => {
 });
 
 // Real-time 1-second sync endpoint so App.js immediately reflects Admin plan changes, blocks, or account deletion
-app.get('/api/users/me', async (req, res) => {
+app.get('/api/users/me', (req, res) => {
   const emailLower = String(req.query.email || '').trim().toLowerCase();
   if (!emailLower) return res.json({ success: false, notFound: true });
-
-  let user = db.users.find(u => u.email.toLowerCase() === emailLower);
-
-  // Merge live status from Supabase without wiping out local users
-  if (dbManager && typeof dbManager.fetchUsersFromSupabase === 'function') {
-    try {
-      const supaUsers = await dbManager.fetchUsersFromSupabase();
-      if (supaUsers && Array.isArray(supaUsers)) {
-        for (const su of supaUsers) {
-          const idx = db.users.findIndex(u => u.email.toLowerCase() === su.email.toLowerCase());
-          if (idx >= 0) db.users[idx] = { ...db.users[idx], ...su };
-          else db.users.push(su);
-        }
-        user = db.users.find(u => u.email.toLowerCase() === emailLower);
-      }
-    } catch (e) {}
-  }
-
+  const user = db.users.find(u => u.email.toLowerCase() === emailLower);
   if (!user) return res.json({ success: false, notFound: true });
   const isBlocked = (db.communityHub?.blockedUsers || []).includes(user.name) ||
     (user.username && (db.communityHub?.blockedUsers || []).includes('@' + user.username)) ||
@@ -2712,12 +2195,18 @@ app.post('/api/users/update-profile', async (req, res) => {
 });
 
 app.post('/api/users/upgrade-plan', async (req, res) => {
-  // Self-upgrade disabled: Only ADMIN can upgrade or activate plans!
-  return res.status(403).json({
-    success: false,
-    requiresAdmin: true,
-    message: '🔒 ترقية وتفعيل الباقات يتطلب موافقة وتفعيل من إدارة Shark Traders AI (Admin Activation Required).'
-  });
+  const { email, plan } = req.body;
+  if (!email || !plan) return res.status(400).json({ error: 'Email and plan required' });
+
+  const emailLower = email.trim().toLowerCase();
+  let user = db.users?.find(u => u.email.toLowerCase() === emailLower);
+  if (user) {
+    user.plan = plan;
+    saveDb();
+    await dbManager.syncUserToSupabase(user);
+    return res.json({ success: true, user });
+  }
+  res.status(404).json({ error: 'User not found' });
 });
 
 // Sync AI Chat Sessions to Structured Database & Supabase
@@ -2738,14 +2227,7 @@ app.get('/api/sessions/sync/:email', (req, res) => {
 const PORT = process.env.PORT || 5000;
 require('./live_turn')(app, { db, saveDb, dbManager, fetch, getLiveTickerSnapshot, fetchLiveMarketData });
 
-let httpServer = null;
-if (!process.env.VERCEL) {
-  httpServer = app.listen(PORT, () => {
-    console.log(`🦈 SHARK QUANT ENTERPRISE ENGINE — http://localhost:${PORT}`);
-  });
-  try {
-    require('./live_ws')(httpServer, { db, saveDb, dbManager, getLiveTickerSnapshot, fetchLiveMarketData, fetchLiveNews, HIGH_IMPACT_CALENDAR });
-  } catch (err) { }
-}
-
-module.exports = app;
+const httpServer = app.listen(PORT, () => {
+  console.log(`🦈 SHARK QUANT ENTERPRISE ENGINE — http://localhost:${PORT}`);
+});
+require('./live_ws')(httpServer, { db, saveDb, dbManager, getLiveTickerSnapshot, fetchLiveMarketData, fetchLiveNews, HIGH_IMPACT_CALENDAR });
