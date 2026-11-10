@@ -2222,10 +2222,16 @@ app.get('/api/auth/bridge-callback', (req, res) => {
       <p>يتم نقل بيانات حساب جوجل إلى برنامج Shark Traders AI بأمان تام...</p>
     </div>
     <div id="successState" style="display:none;">
-      <div class="status-badge">✅ تم الربط بنجاح!</div>
+      <div class="status-badge">✅ تم ربط الحساب بنجاح!</div>
       <h1>مرحباً بك في <span>SHARK TRADERS AI</span></h1>
-      <p id="welcomeEmail" style="color:#FFE600; font-weight:900; font-size:16px;"></p>
-      <p>تم تسجيل دخولك بنجاح في برنامج الويندوز. تم ربط الحساب ويمكنك الآن العودة لتطبيق سطح المكتب 🦈🚀</p>
+      <p id="welcomeEmail" style="color:#FFE600; font-weight:900; font-size:17px; margin-bottom:12px;"></p>
+      <p style="color:#A0B2C6; font-size:14px; line-height:1.6; margin-bottom:24px;">
+        تم تأكيد تسجيل دخولك بنجاح! يمكنك الآن العودة لتطبيق الويندوز للبدء في التحليل والتداول الفوري.
+      </p>
+      <a id="btnOpenApp" href="sharktraders://auth-success" style="display:inline-block; background:linear-gradient(135deg, #00E5FF, #00FF66); color:#07090E; font-weight:900; font-size:15px; padding:14px 28px; border-radius:12px; text-decoration:none; box-shadow:0 10px 25px rgba(0, 229, 255, 0.35); transition:transform 0.2s;">
+        🚀 فتح برنامج Shark Traders AI الآن
+      </a>
+      <p style="font-size:12px; color:#5A6E85; margin-top:14px;">(أو قم بالتبديل مباشرة إلى نافذة البرنامج المفتوحة في شريط المهام)</p>
     </div>
     <div id="errorState" style="display:none;">
       <h1 style="color:#FF3366;">⚠️ تنبيه</h1>
@@ -2258,6 +2264,9 @@ app.get('/api/auth/bridge-callback', (req, res) => {
           document.getElementById('loadingState').style.display = 'none';
           document.getElementById('successState').style.display = 'block';
           document.getElementById('welcomeEmail').innerText = (data.user?.name || 'المتداول') + ' (' + (data.user?.email || '') + ')';
+          setTimeout(() => {
+            try { window.location.href = 'sharktraders://auth-success'; } catch (e) {}
+          }, 800);
         } else {
           throw new Error(data.error || 'فشل إكمال الربط');
         }
