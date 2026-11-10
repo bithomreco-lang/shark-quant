@@ -65,6 +65,16 @@ const TOOLS = [{
       }
     },
     {
+      name: 'delete_community_message',
+      description: 'Delete a message previously posted in the community by this user. Call whenever the user asks to delete, cancel, or remove their community message (e.g. "امسح الرسالة ديالي فالمجتمع", "حذف رسالتي من الشات", "مسح آخر رسالة حطيت", "حيد البوست لي درت", "delete my message").',
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          target: { type: 'STRING', description: 'Optional: keyword to identify which message to delete, or "latest" to delete the most recent message posted by this user.', default: 'latest' }
+        }
+      }
+    },
+    {
       name: 'read_community_discussions',
       description: 'Read the latest discussions and messages from other traders in the Shark Community Hub to know what everyone is discussing, fearing, or buying right now. Call whenever the user asks what traders/members are saying in the community.',
       parameters: {
@@ -72,6 +82,17 @@ const TOOLS = [{
         properties: {
           topic: { type: 'STRING', description: 'Optional keyword to filter discussions, e.g. gold, btc, fed' }
         }
+      }
+    },
+    {
+      name: 'post_to_telegram',
+      description: 'Publish a trading signal, market breakdown, announcement, or alert directly to the user\'s connected Telegram channel or group. Call whenever the user asks you to send or publish something to their Telegram channel or group (e.g. "نشر هاد التحليل فالتلجرام", "صيفط هاد الصفقة للقناة ديالي فالتلجرام", "لوح هاد الشي فالتلغرام", "بارطاجي فالتلغرام").',
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          message: { type: 'STRING', description: 'The complete, well-formatted post content for Telegram (supports emojis, clear institutional structure, Entry, Stop Loss, TP1/TP2).' }
+        },
+        required: ['message']
       }
     },
     {
@@ -183,9 +204,11 @@ WHO YOU ARE & YOUR PLATFORM:
   4. Macro & Geopolitical News (الأخبار اللحظية والماكرو): You track central banks (Fed rates), wars, elections, CPI inflation, and explain their direct impact on market liquidity.
   5. Executive Trade Signals (صفقات واضحة مع إدارة المخاطر): Precise Entry, Stop Loss (1.5x ATR), and Take Profit (1:3+ R:R) adapted to his balance ($${balance}).
   6. Post to Community On His Behalf (النشر في المجتمع بصوته): When he says "اكتب رسالة فالمجتمع قول ليهم...", you call post_to_community and publish the message into the community feed under his actual name and avatar!
-  7. In-App Web Browser & Scraping (متصفح وقارئ مواقع لايف): When he asks to open or check any website/link (Investing, ForexFactory, Reuters, etc.), you open the in-app browser with open_in_app_browser and scrape/analyze it with browse_and_analyze_web!
-  8. Interactive Scrolling (السكرول التفاعلي في المواقع): When he says "هبط لتحت", "سكرولي لتحت", "طلع الفوق", call scroll_web_page to reveal lower paragraphs and tables. You receive the new visual snapshot in real-time!
-  9. YouTube Live Broadcasts & Analysis (يوتيوب والأخبار المرئية): When he asks for YouTube or video news ("شوف يوتيوب شنو واقع", "جيب ليا لايف الفيدرالي في يوتيوب"), call search_youtube_news to open and play the video right in his call viewport!
+  7. Delete Community Messages (حذف رسائله في المجتمع بصوته): When he asks to delete or remove his message from the community ("مسح الرسالة ديالي فالمجتمع", "حذف رسالتي من الشات", "مسح آخر رسالة حطيت"), you call delete_community_message to immediately delete his message from the community feed!
+  8. In-App Web Browser & Scraping (متصفح وقارئ مواقع لايف): When he asks to open or check any website/link (Investing, ForexFactory, Reuters, etc.), you open the in-app browser with open_in_app_browser and scrape/analyze it with browse_and_analyze_web!
+  9. Interactive Scrolling (السكرول التفاعلي في المواقع): When he says "هبط لتحت", "سكرولي لتحت", "طلع الفوق", call scroll_web_page to reveal lower paragraphs and tables. You receive the new visual snapshot in real-time!
+  10. YouTube Live Broadcasts & Analysis (يوتيوب والأخبار المرئية): When he asks for YouTube or video news ("شوف يوتيوب شنو واقع", "جيب ليا لايف الفيدرالي في يوتيوب"), call search_youtube_news to open and play the video right in his call viewport!
+  11. Telegram Channel & Group Broadcasting (النشر التلقائي في التلجرام): When he asks to publish an analysis, signal, or update to his Telegram channel/group ("نشر هاد التحليل فالتلجرام", "صيفط الصفقة لقناتي فالتلجرام", "لوح هاد الشي فالتلغرام"), you call post_to_telegram to broadcast it directly!
 
 COMMUNITY OMNISCIENCE & TRADER PSYCHOLOGY:
 - You know ${name}'s mindset, their recent chats, and what they said in the community:${userCommunityBlock || ' (No previous community posts yet)'}
@@ -229,7 +252,9 @@ TOOLS (use them, don't just talk about it):
 - get_market_data: before quoting any price, level or giving a trade idea, fetch the real data. Never invent numbers.
 - get_live_macro_news: fetch breaking news, political updates, and calendar events to explain market drivers.
 - post_to_community: when ${name} asks you to write, post, or publish something in the community chat on their behalf ("كتب رسالة فالمجتمع...", "نشر هاد التحليل فالمجتمع", "شارك صفقة مع الدراري"), call post_to_community immediately with the content and confirm to him warmly!
+- delete_community_message: when ${name} asks to delete or remove their own community post/message ("مسح الرسالة ديالي فالمجتمع", "حذف رسالتي من الشات", "مسح آخر رسالة حطيت"), call delete_community_message to immediately delete it and confirm to him warmly!
 - read_community_discussions: when ${name} asks what people/traders are saying or discussing ("شنو كيقولو الدراري", "واش كاين شي هضرة فالمجتمع"), call it to fetch the latest messages and summarize them!
+- post_to_telegram: when ${name} asks you to send or publish an analysis, signal, or message to their Telegram channel or group ("نشر هاد التحليل فالتلجرام", "صيفط الصفقة للشانيل تلجرام ديالي", "لوح هاد الشي فالتلغرام"), call post_to_telegram!
 - open_in_app_browser: when ${name} asks to see or open any website or article ("فتح موقع كذا", "وريني Investing", "دخل لـ ForexFactory"), call it! The in-app browser window opens right on his screen!
 - browse_and_analyze_web: when ${name} asks you to read, scrape, or deeply analyze what is written on a webpage or link, call it to fetch live text and explain the key findings!
 - You may receive live frames of his screen when he shares it (screen-share button). Use them: read the price axis, candles, structure, his drawings, and combine with get_market_data.
@@ -412,6 +437,131 @@ Trade ideas: give entry, stop and target clearly but briefly, with risk sized fo
                 recentCommunityDiscussions: formatted,
                 summary: 'Discussions fetched. Tell the user what fellow traders are chatting about.'
               };
+            } else if (fc.name === 'delete_community_message') {
+              const target = String(fc.args?.target || 'latest').trim().toLowerCase();
+              if (!db.communityHub) db.communityHub = {};
+              if (!Array.isArray(db.communityHub.messages)) db.communityHub.messages = [];
+
+              const userObj = (db.users || []).find(u => (u.email || '').toLowerCase() === email.toLowerCase());
+              const isAdmin = (userObj?.role || '').toUpperCase() === 'ADMIN';
+              const cleanSenderName = (userObj?.name || name || '').toLowerCase();
+              const cleanUsername = (userObj?.username || name.toLowerCase().replace(/[^a-z0-9_]/g, '') || '').toLowerCase();
+              const callerEmail = email.toLowerCase();
+
+              const isMine = (m) => {
+                if (isAdmin) return true;
+                if (m.userEmail && m.userEmail.toLowerCase() === callerEmail) return true;
+                if (m.username && m.username.toLowerCase() === cleanUsername) return true;
+                if (m.senderName && m.senderName.toLowerCase() === cleanSenderName) return true;
+                return false;
+              };
+
+              const eligibleMsgs = db.communityHub.messages.filter(isMine);
+
+              if (eligibleMsgs.length === 0) {
+                result = {
+                  ok: false,
+                  error: 'No messages found posted by you in the community.',
+                  messageForAi: 'أخبر المستخدم بالدارجة أنه ليس لديه أي رسائل حالية في مجتمع الحيتان ليتم حذفها.'
+                };
+              } else {
+                let msgToDelete = null;
+                if (target === 'latest' || !target) {
+                  msgToDelete = eligibleMsgs[eligibleMsgs.length - 1];
+                } else {
+                  msgToDelete = [...eligibleMsgs].reverse().find(m => (m.content || '').toLowerCase().includes(target));
+                  if (!msgToDelete) {
+                    msgToDelete = eligibleMsgs[eligibleMsgs.length - 1];
+                  }
+                }
+
+                if (msgToDelete) {
+                  const deletedId = msgToDelete.id;
+                  const deletedContent = msgToDelete.content;
+                  db.communityHub.messages = db.communityHub.messages.filter(m => m.id !== deletedId);
+                  if (Array.isArray(db.communityMessages)) {
+                    db.communityMessages = db.communityMessages.filter(m => m.id !== deletedId);
+                  }
+                  try { saveDb(); } catch (e) {}
+                  if (dbManager && typeof dbManager.syncAllDataToSupabase === 'function') {
+                    dbManager.syncAllDataToSupabase().catch(() => {});
+                  }
+                  // Broadcast deletion event to client
+                  send({ type: 'community_message_deleted', id: deletedId });
+                  result = {
+                    ok: true,
+                    deleted: true,
+                    deletedId,
+                    deletedContent: deletedContent.slice(0, 100),
+                    announcement: 'صافي خويا، مسحت الرسالة ديالك من المجتمع دابا فالحين!'
+                  };
+                }
+              }
+            } else if (fc.name === 'post_to_telegram') {
+              const postText = String(fc.args?.message || '').trim();
+              if (!postText) {
+                result = { error: 'Message content is required to post to Telegram.' };
+              } else {
+                const userObj = (db.users || []).find(u => (u.email || '').toLowerCase() === email.toLowerCase());
+                const chatId = userObj?.telegramChatId || userObj?.telegramChannel || db.config?.telegramChatId || process.env.TELEGRAM_CHAT_ID;
+                const botToken = userObj?.telegramBotToken || db.config?.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN;
+
+                if (!chatId) {
+                  result = {
+                    ok: false,
+                    notConfigured: true,
+                    error: 'Telegram channel not configured in profile.',
+                    instructionForAi: 'قل للمستخدم بالدارجة أنه خاصو يدخل للبروفايل ديالو (Trader Identity) ويحط رابط أو يوزرنيم القناة ديالو فالتلجرام (مثلا @my_channel) ورمز البوت (Bot Token) وغادي نبقى نلوح فيها مباشرة بصوتو فالحين.'
+                  };
+                } else if (!botToken) {
+                  result = {
+                    ok: false,
+                    notConfigured: true,
+                    error: 'Telegram Bot Token not configured in profile.',
+                    instructionForAi: 'قل للمستخدم أنه خاصو يحط رمز البوت Bot Token من @BotFather في إعدادات الحساب باش يقدر ينشر في القناة ديالو مباشرة.'
+                  };
+                } else {
+                  try {
+                    const cleanChatId = chatId.startsWith('@') || chatId.startsWith('-') ? chatId : ('@' + chatId);
+                    const teleRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        chat_id: cleanChatId,
+                        text: postText,
+                        parse_mode: 'HTML'
+                      })
+                    });
+                    const teleData = await teleRes.json();
+                    if (teleData.ok) {
+                      send({
+                        type: 'telegram_post_sent',
+                        chatId: cleanChatId,
+                        text: postText,
+                        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      });
+                      result = {
+                        ok: true,
+                        sent: true,
+                        chatId: cleanChatId,
+                        announcement: `صافي خويا، نشرت هاد التحليل/الصفقة فالقناة ديالك فالتلجرام (${cleanChatId}) بنجاح!`
+                      };
+                    } else {
+                      result = {
+                        ok: false,
+                        error: teleData.description,
+                        instructionForAi: `وقع مشكل من تلجرام: ${teleData.description}. تأكد أن البوت ديالك مضاف كـ Admin في القناة وعندو صلاحية نشر الرسائل.`
+                      };
+                    }
+                  } catch (err) {
+                    result = {
+                      ok: false,
+                      error: err.message,
+                      instructionForAi: 'وقع خطأ في الاتصال بسيرفر تلجرام. تحقق من الاتصال والرمز.'
+                    };
+                  }
+                }
+              }
             } else if (fc.name === 'open_in_app_browser' || fc.name === 'browse_and_analyze_web') {
               let targetUrl = String(fc.args?.url || '').trim();
               if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {

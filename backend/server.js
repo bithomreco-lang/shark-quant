@@ -2163,7 +2163,19 @@ app.get('/api/users/directory', (req, res) => {
 });
 
 app.post('/api/users/update-profile', async (req, res) => {
-  const { email, name, username, avatar, hasAcceptedCommunityRules, plan, balance, riskPercent } = req.body;
+  const {
+    email,
+    name,
+    username,
+    avatar,
+    hasAcceptedCommunityRules,
+    plan,
+    balance,
+    riskPercent,
+    telegramChatId,
+    telegramBotToken,
+    telegramEnabled
+  } = req.body;
   if (!email) return res.status(400).json({ error: 'Email is required' });
 
   const emailLower = email.trim().toLowerCase();
@@ -2186,12 +2198,73 @@ app.post('/api/users/update-profile', async (req, res) => {
     if (plan !== undefined) user.plan = plan;
     if (balance !== undefined) user.balance = Number(balance) || 0;
     if (riskPercent !== undefined) user.riskPercent = Number(riskPercent) || 1;
+    if (telegramChatId !== undefined) user.telegramChatId = String(telegramChatId).trim();
+    if (telegramBotToken !== undefined) user.telegramBotToken = String(telegramBotToken).trim();
+    if (telegramEnabled !== undefined) user.telegramEnabled = Boolean(telegramEnabled);
     saveDb();
     await dbManager.syncUserToSupabase(user);
     return res.json({ success: true, user });
   }
 
   res.status(404).json({ error: 'User not found' });
+});
+
+// ── Telegram Integration Endpoints ──
+app.post('/api/telegram/test', async (req, res) => {
+  const { chatId, botToken, message, email } = req.body;
+  let token = (botToken || '').trim();
+  let chat = (chatId || '').trim();
+
+  if (email && (!token || !chat)) {
+    const user = db.users?.find(u => (u.email || '').toLowerCase() === email.toLowerCase());
+    if (user) {
+      if (!chat) chat = user.telegramChatId || '';
+      if (!token) token = user.telegramBotToken || '';
+    }
+  }
+
+  if (!token) token = db.config?.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN || '';
+  if (!chat) chat = db.config?.telegramChatId || process.env.TELEGRAM_CHAT_ID || '';
+
+  if (!token) {
+    return res.status(400).json({
+      success: false,
+      error: 'رمز البوت (Telegram Bot Token) مطلوب. يمكنك الحصول عليه مجاناً في 20 ثانية من @BotFather في تلجرام.'
+    });
+  }
+  if (!chat) {
+    return res.status(400).json({
+      success: false,
+      error: 'معرف القناة أو الشات (Chat ID / @Channel) مطلوب. مثال: @my_crypto_channel'
+    });
+  }
+
+  const cleanChat = chat.startsWith('@') || chat.startsWith('-') ? chat : ('@' + chat);
+  const textToSend = message || `🦈 <b>SHARK TRADERS AI</b>\n\n✅ <b>تم ربط قناتك بنجاح مع المنصة المؤسسية!</b>\nالآن خلال أي مكالمة صوتية حية، فقط قل للحوت:\n<i>"انشر هاد التحليل في التلجرام"</i>\nوسيتم إرسال الصفقات والتحديثات مباشرة وبسرعة فائقة! 🚀`;
+
+  try {
+    const teleRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: cleanChat,
+        text: textToSend,
+        parse_mode: 'HTML'
+      })
+    });
+    const teleData = await teleRes.json();
+    if (teleData.ok) {
+      return res.json({ success: true, message: 'تم إرسال رسالة الاختبار بنجاح إلى التلجرام!', data: teleData.result });
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: teleData.description || 'فشل إرسال الرسالة من تلجرام',
+        tip: 'تأكد أن البوت تمت إضافته كـ مشرف (Admin) في قناتك أو مجموعتك وله صلاحية نشر الرسائل (Post Messages).'
+      });
+    }
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 app.post('/api/users/upgrade-plan', async (req, res) => {
