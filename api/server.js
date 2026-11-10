@@ -274,12 +274,12 @@ function isSimplePriceQuery(text) {
 function isCasualGreeting(text) {
   if (!text) return false;
   let t = text.replace(/\[Trader Voice Query\]:?/gi, '')
-              .replace(/\[Voice Note.*?\]:?/gi, '')
-              .replace(/\[Audio Note.*?\]:?/gi, '')
-              .replace(/\[.*?\]/g, '')
-              .replace(/["'«»]/g, '')
-              .trim()
-              .replace(/[.,!؟ـ]/g, '');
+    .replace(/\[Voice Note.*?\]:?/gi, '')
+    .replace(/\[Audio Note.*?\]:?/gi, '')
+    .replace(/\[.*?\]/g, '')
+    .replace(/["'«»]/g, '')
+    .trim()
+    .replace(/[.,!؟ـ]/g, '');
   const greetings = [
     'السلام', 'سلام', 'السلام عليكم', 'وعليكم السلام', 'اهلا', 'أهلا', 'أهلاً', 'مرحبا', 'مرحباً', 'صباح الخير', 'مساء الخير',
     'اهلا صديقي', 'أهلا صديقي', 'أهلاً يا صديقي', 'كيفك', 'شخبارك', 'شو الاخبار', 'شو اخبارك', 'كيداير', 'لاباس', 'صافا',
@@ -545,7 +545,7 @@ async function fetchLiveMarketData(symbol, exchange, interval) {
           tvPrice = parseFloat(tvScan.data[0].d[0]).toFixed(2);
           tvChange = `${parseFloat(tvScan.data[0].d[1] || 0).toFixed(2)}%`;
         }
-      } catch (e) {}
+      } catch (e) { }
 
       const intervalMap = { '1': '1m', '5': '5m', '15': '15m', '30': '30m', '45': '45m', '60': '1h', '240': '4h', 'D': '1d', 'W': '1w' };
       const tf = intervalMap[interval] || '1h';
@@ -565,7 +565,7 @@ async function fetchLiveMarketData(symbol, exchange, interval) {
             volume: parseFloat(c[5]).toFixed(0)
           }));
         }
-      } catch (e) {}
+      } catch (e) { }
 
       const last = lastCandles[lastCandles.length - 1] || { high: tvPrice, low: tvPrice, volume: '1500' };
       const trend = !String(tvChange).startsWith('-') ? '▲ صاعد (Bullish)' : '▼ هابط (Bearish)';
@@ -1097,8 +1097,8 @@ TRADER PROFILE: Name: ${userName}, Plan: ${userPlan}, Capital: $${userBalance}.$
         // ── استخراج عقل وتفكير القرش المؤسسي (Reasoning Process) وتنظيفه بالكامل ──
         let thinkingProcess = null;
         const thinkMatch = aiReply.match(/<thinking>([\s\S]*?)<\/thinking>/i) ||
-                           aiReply.match(/<thought>([\s\S]*?)<\/thought>/i) ||
-                           aiReply.match(/<think>([\s\S]*?)<\/think>/i);
+          aiReply.match(/<thought>([\s\S]*?)<\/thought>/i) ||
+          aiReply.match(/<think>([\s\S]*?)<\/think>/i);
         if (thinkMatch) {
           thinkingProcess = thinkMatch[1].trim();
         }
@@ -1284,7 +1284,7 @@ function createReadyCharonSocket() {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`);
     const timer = setTimeout(() => {
-      try { ws.close(); } catch (e) {}
+      try { ws.close(); } catch (e) { }
       reject(new Error('Charon WS setup timeout'));
     }, 8000);
 
@@ -1314,7 +1314,7 @@ function createReadyCharonSocket() {
           ws.removeListener('message', onSetupMsg);
           resolve(ws);
         }
-      } catch (e) {}
+      } catch (e) { }
     };
 
     ws.on('message', onSetupMsg);
@@ -1370,7 +1370,7 @@ async function synthesizeCharonViaLiveWsSingle(cleanText, useWarm = true) {
   return new Promise((resolve, reject) => {
     const pcmChunks = [];
     const timer = setTimeout(() => {
-      try { ws.close(); } catch (e) {}
+      try { ws.close(); } catch (e) { }
       if (pcmChunks.length > 0) {
         resolve(wrapPcm24kAsWav(Buffer.concat(pcmChunks)));
       } else {
@@ -1392,7 +1392,7 @@ async function synthesizeCharonViaLiveWsSingle(cleanText, useWarm = true) {
           }
           if (sc.turnComplete) {
             clearTimeout(timer);
-            try { ws.close(); } catch (e) {}
+            try { ws.close(); } catch (e) { }
             const pcmBuf = Buffer.concat(pcmChunks);
             if (pcmBuf.length === 0) return reject(new Error('Charon returned empty audio'));
             resolve(wrapPcm24kAsWav(pcmBuf));
@@ -1400,7 +1400,7 @@ async function synthesizeCharonViaLiveWsSingle(cleanText, useWarm = true) {
         }
       } catch (err) {
         clearTimeout(timer);
-        try { ws.close(); } catch (e) {}
+        try { ws.close(); } catch (e) { }
         reject(err);
       }
     });
@@ -2058,7 +2058,7 @@ app.get('/api/auth/supabase-config', async (req, res) => {
         const s = await r.json();
         googleOAuthEnabledInSupabase = Boolean(s?.external?.google);
       }
-    } catch (e) {}
+    } catch (e) { }
   }
   const oauthUrl = supabaseUrl
     ? `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectTo)}&prompt=select_account`
@@ -2234,7 +2234,7 @@ if (!process.env.VERCEL) {
   });
   try {
     require('./live_ws')(httpServer, { db, saveDb, dbManager, getLiveTickerSnapshot, fetchLiveMarketData, fetchLiveNews, HIGH_IMPACT_CALENDAR });
-  } catch (err) {}
+  } catch (err) { }
 }
 
 module.exports = app;
