@@ -40,7 +40,7 @@ namespace SharkQuantLauncher
                     ProcessStartInfo psi = new ProcessStartInfo
                     {
                         FileName = browserExe,
-                        Arguments = string.Format("--app=\"{0}\" --window-size=430,890 --user-data-dir=\"{1}\"", targetUrl, profileDir),
+                        Arguments = string.Format("--app=\"{0}\" --window-size=430,890", targetUrl),
                         UseShellExecute = false
                     };
                     Process.Start(psi);

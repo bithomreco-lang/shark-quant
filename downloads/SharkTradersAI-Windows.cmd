@@ -15,14 +15,14 @@ set TARGET_URL=https://shark-quant-backend-auw2-blue.vercel.app/app
 :: Check if Microsoft Edge is available (installed on all Windows 10/11)
 where msedge >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
-    start msedge --app="%TARGET_URL%" --window-size=1280,820 --user-data-dir="%LOCALAPPDATA%\SharkQuantApp"
+    start msedge --app="%TARGET_URL%" --window-size=1280,820
     goto done
 )
 
 :: Fallback to Google Chrome
 where chrome >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
-    start chrome --app="%TARGET_URL%" --window-size=1280,820 --user-data-dir="%LOCALAPPDATA%\SharkQuantApp"
+    start chrome --app="%TARGET_URL%" --window-size=1280,820
     goto done
 )
 
