@@ -2204,31 +2204,87 @@ app.post('/api/auth/supabase-oauth-callback', async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// DESKTOP & EXTERNAL BROWSER OAUTH BRIDGE
+// DESKTOP & EXTERNAL BROWSER OAUTH BRIDGE (SUPABASE PERSISTENT)
 // ══════════════════════════════════════════════════════════════
 if (!global.__oauthBridges) global.__oauthBridges = new Map();
 
-// 1. Init bridge session from desktop app
-app.post('/api/auth/bridge-init', (req, res) => {
-  const bridgeId = 'shk_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
-  global.__oauthBridges.set(bridgeId, { status: 'pending', createdAt: Date.now() });
-  const cutoff = Date.now() - 15 * 60 * 1000;
-  for (const [k, v] of global.__oauthBridges.entries()) {
-    if (v.createdAt < cutoff) global.__oauthBridges.delete(k);
+// Helper to get Supabase client for bridge persistence across Vercel Lambdas
+function getBridgeSupaClient() {
+  try {
+    const { createClient } = require('@supabase/supabase-js');
+    const supaUrl = (process.env.SUPABASE_URL || 'https://krukhcmndvuklflxprvr.supabase.co').trim();
+    const supaKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || 'sb_publishable_MPI-lFS-ZRuopxnWXZGcbg_AwkhTSST').trim();
+    return createClient(supaUrl, supaKey, { auth: { persistSession: false } });
+  } catch (e) {
+    return null;
   }
+}
+
+// 1. Init bridge session from desktop app
+app.post('/api/auth/bridge-init', async (req, res) => {
+  const bridgeId = 'shk_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+  const sessionData = { status: 'pending', createdAt: Date.now() };
+  
+  // In-memory fallback
+  global.__oauthBridges.set(bridgeId, sessionData);
+
+  // Cloud persistence via Supabase system_settings so ANY Vercel lambda instance can read it!
+  const supa = getBridgeSupaClient();
+  if (supa) {
+    try {
+      await supa.from('system_settings').upsert({
+        key: 'bridge_' + bridgeId,
+        value: sessionData,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'key' });
+    } catch (e) {
+      console.warn('Supabase bridge-init save warn:', e.message);
+    }
+  }
+
   res.json({ success: true, bridgeId });
 });
 
 // 2. Poll bridge session from desktop app
-app.get('/api/auth/bridge-poll', (req, res) => {
+app.get('/api/auth/bridge-poll', async (req, res) => {
   const { bridgeId } = req.query;
-  if (!bridgeId || !global.__oauthBridges.has(bridgeId)) {
-    return res.json({ completed: false, error: 'Bridge not found or expired' });
+  if (!bridgeId) {
+    return res.json({ completed: false, error: 'Bridge ID required' });
   }
-  const session = global.__oauthBridges.get(bridgeId);
-  if (session.status === 'completed') {
+
+  // 1. Check in-memory first
+  let session = global.__oauthBridges.get(bridgeId);
+  if (session && session.status === 'completed') {
     return res.json({ completed: true, user: session.user, token: session.token });
   }
+
+  // 2. Query Supabase Cloud system_settings (The ultimate source of truth across all Vercel instances)
+  const supa = getBridgeSupaClient();
+  if (supa) {
+    try {
+      const { data, error } = await supa
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'bridge_' + bridgeId)
+        .maybeSingle();
+
+      if (data && data.value) {
+        session = data.value;
+        if (session.status === 'completed') {
+          global.__oauthBridges.set(bridgeId, session);
+          return res.json({ completed: true, user: session.user, token: session.token });
+        }
+        return res.json({ completed: false, status: 'pending' });
+      }
+    } catch (e) {
+      console.warn('Supabase bridge-poll warn:', e.message);
+    }
+  }
+
+  if (session && session.status === 'pending') {
+    return res.json({ completed: false, status: 'pending' });
+  }
+
   return res.json({ completed: false, status: 'pending' });
 });
 
@@ -2367,14 +2423,32 @@ app.post('/api/auth/bridge-complete', async (req, res) => {
     const { bridgeId, accessToken } = req.body;
     if (!accessToken) return res.status(400).json({ success: false, error: 'Access token required' });
     const result = await dbManager.verifySupabaseOAuthToken(accessToken, '');
-    if (bridgeId && global.__oauthBridges.has(bridgeId)) {
-      global.__oauthBridges.set(bridgeId, {
-        status: 'completed',
-        user: result.user,
-        token: accessToken,
-        completedAt: Date.now()
-      });
+
+    const completedSession = {
+      status: 'completed',
+      user: result.user,
+      token: accessToken,
+      completedAt: Date.now()
+    };
+
+    if (bridgeId) {
+      global.__oauthBridges.set(bridgeId, completedSession);
+
+      // Save to Supabase Cloud so all Vercel Lambdas immediately detect it!
+      const supa = getBridgeSupaClient();
+      if (supa) {
+        try {
+          await supa.from('system_settings').upsert({
+            key: 'bridge_' + bridgeId,
+            value: completedSession,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'key' });
+        } catch (e) {
+          console.warn('Supabase bridge-complete save warn:', e.message);
+        }
+      }
     }
+
     res.json({ success: true, user: result.user });
   } catch (err) {
     console.error('Bridge complete error:', err.message);
