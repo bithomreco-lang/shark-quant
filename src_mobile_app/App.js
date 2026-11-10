@@ -1807,45 +1807,46 @@ export default function App() {
 
   const startLiveCallListening = () => {};
 
-  const openCallMic = async (ws) => {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-    });
-    if (!liveCallActiveRef.current) { stream.getTracks().forEach((t) => t.stop()); return; }
-    callStreamRef.current = stream;
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    const ctx = new Ctx();
-    callAudioCtxRef.current = ctx;
-    const src = ctx.createMediaStreamSource(stream);
-    const proc = ctx.createScriptProcessor(2048, 1, 1);
-    callProcRef.current = proc;
-    const mute = ctx.createGain();
-    mute.gain.value = 0;
-    src.connect(proc);
-    proc.connect(mute);
-    mute.connect(ctx.destination);
-    const ratio = ctx.sampleRate / 16000;
-    proc.onaudioprocess = (e) => {
-      if (!liveCallActiveRef.current || callMicMutedRef.current || ws.readyState !== 1) return;
-      const input = e.inputBuffer.getChannelData(0);
-      const outLen = Math.floor(input.length / ratio);
-      const pcm = new Int16Array(outLen);
-      for (let i = 0; i < outLen; i++) {
-        const s = Math.max(-1, Math.min(1, input[Math.floor(i * ratio)]));
-        pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-      }
-      const bytes = new Uint8Array(pcm.buffer);
-      let bin = '';
-      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-      const b64 = window.btoa(bin);
-
-      // Stream audio directly into Gemini Live!
-      ws.send(JSON.stringify({
-        realtimeInput: {
-          mediaChunks: [{ mimeType: 'audio/pcm;rate=16000', data: b64 }]
+  const openCallMic = (ws) => {
+    const stream = callStreamRef.current;
+    if (!stream || !liveCallActiveRef.current) return;
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      const ctx = new Ctx();
+      callAudioCtxRef.current = ctx;
+      const src = ctx.createMediaStreamSource(stream);
+      const proc = ctx.createScriptProcessor(2048, 1, 1);
+      callProcRef.current = proc;
+      const mute = ctx.createGain();
+      mute.gain.value = 0;
+      src.connect(proc);
+      proc.connect(mute);
+      mute.connect(ctx.destination);
+      const ratio = ctx.sampleRate / 16000;
+      proc.onaudioprocess = (e) => {
+        if (!liveCallActiveRef.current || callMicMutedRef.current || ws.readyState !== 1) return;
+        const input = e.inputBuffer.getChannelData(0);
+        const outLen = Math.floor(input.length / ratio);
+        const pcm = new Int16Array(outLen);
+        for (let i = 0; i < outLen; i++) {
+          const s = Math.max(-1, Math.min(1, input[Math.floor(i * ratio)]));
+          pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
         }
-      }));
-    };
+        const bytes = new Uint8Array(pcm.buffer);
+        let bin = '';
+        for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+        const b64 = window.btoa(bin);
+
+        // Stream audio directly into Gemini Live!
+        ws.send(JSON.stringify({
+          realtimeInput: {
+            mediaChunks: [{ mimeType: 'audio/pcm;rate=16000', data: b64 }]
+          }
+        }));
+      };
+    } catch (e) {
+      console.warn('Audio processor init error:', e);
+    }
   };
 
   const teardownCall = () => {
@@ -2048,6 +2049,17 @@ export default function App() {
       console.warn('Audio context prime warning:', audioInitErr);
     }
 
+    // Request mic access immediately inside the user click handler
+    try {
+      const micStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+      callStreamRef.current = micStream;
+    } catch (micErr) {
+      console.warn('Microphone permission warning:', micErr);
+      setCallStatusMessage('⚠️ عطي الإذن للميكروفون من المتصفح');
+    }
+
     // Direct Ultra-Fast Gemini Live WebSocket (Sub-300ms Native Voice & Vision)
     let wsSetupDone = false;
     try {
@@ -2098,9 +2110,7 @@ export default function App() {
       ws.onmessage = (ev) => {
         wsSetupDone = true;
         handleCallSocketMessage(ev);
-        if (!callStreamRef.current) {
-          openCallMic(ws).catch(() => setCallStatusMessage('⚠️ عطي الإذن للميكروفون من المتصفح'));
-        }
+        openCallMic(ws);
       };
 
       ws.onerror = (err) => {

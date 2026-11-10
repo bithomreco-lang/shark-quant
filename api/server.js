@@ -1216,13 +1216,8 @@ TRADER PROFILE: Name: ${userName}, Plan: ${userPlan}, Capital: $${userBalance}.$
           if (!summary) summary = replyIsArabic ? 'أهلاً خويا هاجر، السوق دابا كيدير تحركات قوية، تابع الشارت.' : 'Yo trader, market is printing high volatility right now.';
 
           aiVoiceUrl = `/api/tts?text=${encodeURIComponent(summary)}&lang=${replyIsArabic ? 'ar' : 'en'}`;
-          // Pre-synthesize the genuine Gemini Live "Charon" voice into RAM cache BEFORE returning,
-          // so that auto-play and the Play button ("بلاس") work in 0ms with zero failure!
-          try {
-            await getOrCreateCharonWav(summary);
-          } catch (preErr) {
-            console.warn('Charon pre-synthesis warning:', preErr.message);
-          }
+          // Pre-synthesize the genuine Gemini Live "Charon" voice in background so /api/chat responds in under 1 second!
+          getOrCreateCharonWav(summary).catch(preErr => console.warn('Charon pre-synthesis warning:', preErr.message));
         }
 
         const outChart = (chartMeta.wantsChart || (isLiveCall && chartMeta.rawSymbol))

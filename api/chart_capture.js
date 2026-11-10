@@ -15,7 +15,7 @@ const CHROME_PATH = process.env.CHROME_PATH ||
         : (fs.existsSync('/usr/bin/google-chrome') ? '/usr/bin/google-chrome' : null))));
 
 async function captureTradingViewScreenshot(symbol = 'OANDA:XAUUSD', interval = '60') {
-  if (!CHROME_PATH) return null;
+  if (process.env.VERCEL || !puppeteer || !CHROME_PATH) return null;
   const safeSym = String(symbol || 'OANDA:XAUUSD').replace(/[^a-zA-Z0-9]/g, '_');
   const filename = `tv_${safeSym}_${interval}_${Date.now()}.png`;
   const uploadsDir = path.join(__dirname, 'public', 'uploads');
