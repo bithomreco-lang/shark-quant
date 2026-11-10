@@ -2224,7 +2224,7 @@ app.get('/api/sessions/sync/:email', (req, res) => {
   res.json({ success: true, data });
 });
 
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 require('./live_turn')(app, { db, saveDb, dbManager, fetch, getLiveTickerSnapshot, fetchLiveMarketData });
 
 const httpServer = app.listen(PORT, () => {
