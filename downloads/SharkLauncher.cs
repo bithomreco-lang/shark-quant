@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Windows.Forms;
 
 namespace SharkQuantLauncher
@@ -8,24 +9,35 @@ namespace SharkQuantLauncher
     static class Program
     {
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
             try
             {
                 string targetUrl = "https://shark-quant-backend-auw2-blue.vercel.app/app";
                 string appName = "Shark Traders AI";
-                string profileDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SharkQuantProfile");
+                string currentExe = Assembly.GetExecutingAssembly().Location;
+                string installDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SharkTradersAI");
 
-                if (!Directory.Exists(profileDir))
+                if (!Directory.Exists(installDir))
                 {
-                    Directory.CreateDirectory(profileDir);
+                    Directory.CreateDirectory(installDir);
                 }
 
-                // 1. Create Desktop and Start Menu Shortcuts
-                CreateShortcut(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), appName, targetUrl);
-                CreateShortcut(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.StartMenu), "Programs"), appName, targetUrl);
+                string installedExe = Path.Combine(installDir, "SharkTradersAI.exe");
 
-                // 2. Launch phone-sized app window (430x890)
+                // 1. Install or update the executable with embedded Shark Icon
+                if (!string.Equals(currentExe, installedExe, StringComparison.OrdinalIgnoreCase) && File.Exists(currentExe))
+                {
+                    try { File.Copy(currentExe, installedExe, true); } catch { }
+                }
+
+                string finalExe = File.Exists(installedExe) ? installedExe : currentExe;
+
+                // 2. Create Desktop and Start Menu Shortcuts with native 3D Shark Icon (.lnk)
+                CreateWindowsShortcut(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), appName, finalExe);
+                CreateWindowsShortcut(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.StartMenu), "Programs"), appName, finalExe);
+
+                // 3. Launch sleek phone-sized app window (430x890) using default user profile
                 string edgePath = @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe";
                 if (!File.Exists(edgePath))
                 {
@@ -56,20 +68,23 @@ namespace SharkQuantLauncher
             }
         }
 
-        static void CreateShortcut(string folderPath, string appName, string targetUrl)
+        static void CreateWindowsShortcut(string folderPath, string appName, string targetPath)
         {
             try
             {
-                string shortcutPath = Path.Combine(folderPath, appName + ".url");
-                using (StreamWriter writer = new StreamWriter(shortcutPath))
+                Type shellType = Type.GetTypeFromProgID("WScript.Shell");
+                if (shellType != null)
                 {
-                    writer.WriteLine("[InternetShortcut]");
-                    writer.WriteLine("URL=" + targetUrl);
-                    writer.WriteLine("IconIndex=0");
+                    dynamic shell = Activator.CreateInstance(shellType);
+                    string shortcutPath = Path.Combine(folderPath, appName + ".lnk");
+                    dynamic shortcut = shell.CreateShortcut(shortcutPath);
+                    shortcut.TargetPath = targetPath;
+                    shortcut.IconLocation = targetPath + ",0";
+                    shortcut.Description = "Shark Traders AI — Institutional Trading Platform";
+                    shortcut.Save();
                 }
             }
             catch { }
         }
     }
 }
-
