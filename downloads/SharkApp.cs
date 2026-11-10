@@ -1,16 +1,22 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 
 namespace SharkQuantApp
 {
     static class Program
     {
+        [DllImport("shell32.dll", SetLastError = true)]
+        private static extern void SetCurrentProcessExplicitAppUserModelID([MarshalAs(UnmanagedType.LPWStr)] string AppID);
+
         [STAThread]
         static void Main(string[] args)
         {
             try
             {
+                SetCurrentProcessExplicitAppUserModelID("SharkTradersAI.QuantPlatform.1.0");
+
                 string targetUrl = "https://shark-quant-backend-auw2-blue.vercel.app/app";
                 string localData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SharkTradersAI", "UserData");
 
@@ -33,7 +39,7 @@ namespace SharkQuantApp
                     ProcessStartInfo psi = new ProcessStartInfo
                     {
                         FileName = browserExe,
-                        Arguments = string.Format("--app=\"{0}\" --user-data-dir=\"{1}\" --window-size=460,920 --window-position=450,50 --app-id=SharkTradersAI --disable-features=Translate,OptimizationGuideModelDownloading", targetUrl, localData),
+                        Arguments = string.Format("--app=\"{0}\" --user-data-dir=\"{1}\" --window-size=480,940 --window-position=450,40 --app-id=SharkTradersAI --disable-features=Translate,OptimizationGuideModelDownloading", targetUrl, localData),
                         UseShellExecute = false
                     };
                     Process.Start(psi);
@@ -50,4 +56,3 @@ namespace SharkQuantApp
         }
     }
 }
-

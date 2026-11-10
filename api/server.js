@@ -2123,6 +2123,176 @@ app.post('/api/auth/supabase-oauth-callback', async (req, res) => {
   }
 });
 
+// ══════════════════════════════════════════════════════════════
+// DESKTOP & EXTERNAL BROWSER OAUTH BRIDGE
+// ══════════════════════════════════════════════════════════════
+if (!global.__oauthBridges) global.__oauthBridges = new Map();
+
+// 1. Init bridge session from desktop app
+app.post('/api/auth/bridge-init', (req, res) => {
+  const bridgeId = 'shk_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+  global.__oauthBridges.set(bridgeId, { status: 'pending', createdAt: Date.now() });
+  const cutoff = Date.now() - 15 * 60 * 1000;
+  for (const [k, v] of global.__oauthBridges.entries()) {
+    if (v.createdAt < cutoff) global.__oauthBridges.delete(k);
+  }
+  res.json({ success: true, bridgeId });
+});
+
+// 2. Poll bridge session from desktop app
+app.get('/api/auth/bridge-poll', (req, res) => {
+  const { bridgeId } = req.query;
+  if (!bridgeId || !global.__oauthBridges.has(bridgeId)) {
+    return res.json({ completed: false, error: 'Bridge not found or expired' });
+  }
+  const session = global.__oauthBridges.get(bridgeId);
+  if (session.status === 'completed') {
+    return res.json({ completed: true, user: session.user, token: session.token });
+  }
+  return res.json({ completed: false, status: 'pending' });
+});
+
+// 3. Callback page served to the external browser (reads token, sends to complete, shows "تم الربط")
+app.get('/api/auth/bridge-callback', (req, res) => {
+  const bridgeId = req.query.bridgeId || '';
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SHARK TRADERS AI // تأكيد ربط الحساب</title>
+  <link rel="icon" type="image/png" href="/assets/favicon.png">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #07090E;
+      color: #E6EDF5;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .card {
+      background: #0E131E;
+      border: 2px solid #00E5FF;
+      border-radius: 24px;
+      padding: 40px 32px;
+      max-width: 480px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 229, 255, 0.25);
+      animation: popIn 0.3s ease-out;
+    }
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .logo {
+      width: 90px;
+      height: 90px;
+      border-radius: 20px;
+      border: 2px solid #FFE600;
+      margin-bottom: 20px;
+      box-shadow: 0 0 35px rgba(255, 230, 0, 0.4);
+    }
+    h1 { font-size: 24px; font-weight: 900; color: #FFF; margin-bottom: 12px; }
+    h1 span { color: #00E5FF; }
+    p { color: #8A9BB4; font-size: 15px; line-height: 1.6; margin-bottom: 20px; }
+    .status-badge {
+      display: inline-block;
+      background: rgba(0, 230, 153, 0.18);
+      border: 1.5px solid #00E699;
+      color: #00E699;
+      padding: 10px 24px;
+      border-radius: 30px;
+      font-weight: 800;
+      font-size: 15px;
+      margin-bottom: 22px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <img src="/app/favicon.png" class="logo" alt="Shark Traders AI" onerror="this.src='/assets/favicon.png'">
+    <div id="loadingState">
+      <h1>جاري <span>تأكيد الربط...</span></h1>
+      <p>يتم نقل بيانات حساب جوجل إلى برنامج Shark Traders AI بأمان تام...</p>
+    </div>
+    <div id="successState" style="display:none;">
+      <div class="status-badge">✅ تم الربط بنجاح!</div>
+      <h1>مرحباً بك في <span>SHARK TRADERS AI</span></h1>
+      <p id="welcomeEmail" style="color:#FFE600; font-weight:900; font-size:16px;"></p>
+      <p>تم تسجيل دخولك بنجاح في برنامج الويندوز. تم ربط الحساب ويمكنك الآن العودة لتطبيق سطح المكتب 🦈🚀</p>
+    </div>
+    <div id="errorState" style="display:none;">
+      <h1 style="color:#FF3366;">⚠️ تنبيه</h1>
+      <p id="errorMsg">حدث خطأ أثناء الربط، يرجى المحاولة مجدداً.</p>
+    </div>
+  </div>
+
+  <script>
+    (async function() {
+      const bridgeId = "${bridgeId}" || new URLSearchParams(window.location.search).get('bridgeId') || '';
+      const hash = window.location.hash ? window.location.hash.substring(1) : '';
+      const params = new URLSearchParams(hash || window.location.search);
+      const accessToken = params.get('access_token');
+
+      if (!accessToken) {
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('errorState').style.display = 'block';
+        document.getElementById('errorMsg').innerText = params.get('error_description') || 'لم يتم العثور على رمز تسجيل الدخول.';
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/auth/bridge-complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bridgeId, accessToken })
+        });
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById('loadingState').style.display = 'none';
+          document.getElementById('successState').style.display = 'block';
+          document.getElementById('welcomeEmail').innerText = (data.user?.name || 'المتداول') + ' (' + (data.user?.email || '') + ')';
+        } else {
+          throw new Error(data.error || 'فشل إكمال الربط');
+        }
+      } catch (e) {
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('errorState').style.display = 'block';
+        document.getElementById('errorMsg').innerText = e.message;
+      }
+    })();
+  </script>
+</body>
+</html>`);
+});
+
+// 4. Resolve bridge with verified token
+app.post('/api/auth/bridge-complete', async (req, res) => {
+  try {
+    const { bridgeId, accessToken } = req.body;
+    if (!accessToken) return res.status(400).json({ success: false, error: 'Access token required' });
+    const result = await dbManager.verifySupabaseOAuthToken(accessToken, '');
+    if (bridgeId && global.__oauthBridges.has(bridgeId)) {
+      global.__oauthBridges.set(bridgeId, {
+        status: 'completed',
+        user: result.user,
+        token: accessToken,
+        completedAt: Date.now()
+      });
+    }
+    res.json({ success: true, user: result.user });
+  } catch (err) {
+    console.error('Bridge complete error:', err.message);
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 app.post('/api/admin/wipe-all-data', async (req, res) => {
   await dbManager.wipeAllData();
   res.json({ success: true, message: 'تم تفريغ جميع البيانات والحسابات الوهمية بالكامل (0 مستخدمين)' });

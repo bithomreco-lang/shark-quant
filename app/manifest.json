@@ -1,0 +1,16 @@
+{
+  "short_name": "Shark Traders AI",
+  "name": "Shark Traders AI — Institutional Trading Platform",
+  "icons": [
+    {
+      "src": "/app/favicon.png",
+      "type": "image/png",
+      "sizes": "256x256 512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/app",
+  "background_color": "#07090E",
+  "theme_color": "#07090E",
+  "display": "standalone"
+}
