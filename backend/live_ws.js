@@ -4,7 +4,7 @@ const WebSocket = require('ws');
 const { analyze } = require('./market_analysis');
 const { captureTradingViewScreenshot } = require('./chart_capture');
 
-const LIVE_MODEL = 'models/gemini-3.8-live';
+const LIVE_MODEL = 'models/gemini-2.5-flash-native-audio-preview-12-2025';
 const VOICE = 'Charon'; // deep, calm male voice
 
 const CHARTS = {
