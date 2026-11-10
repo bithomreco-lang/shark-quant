@@ -801,7 +801,17 @@
         document.getElementById('activeSubscribers').innerText = data.activeSubscribers || 0;
         
         const memMap = data.aiLearningMemory || {};
-        cachedUsers = data.users || [];
+        const freshUsers = data.users || [];
+        if (cachedUsers && cachedUsers.length > 0) {
+          freshUsers.forEach(u => {
+            const local = cachedUsers.find(c => c.id === u.id || (c.email && c.email.toLowerCase() === (u.email || '').toLowerCase()));
+            if (local && local._lastUpdated && (Date.now() - local._lastUpdated < 8000)) {
+              u.plan = local.plan;
+              u._lastUpdated = local._lastUpdated;
+            }
+          });
+        }
+        cachedUsers = freshUsers;
         cachedMemMap = memMap;
         document.getElementById('learnedCount').innerText = Object.keys(memMap).length;
         
@@ -931,7 +941,10 @@ GRANT ALL ON TABLE public.users, public.ai_learning_memory, public.user_conversa
     async function changeUserPlan(userId, plan, email = '') {
       if (cachedUsers) {
         const row = cachedUsers.find(u => (userId && u.id === userId) || (email && u.email === email));
-        if (row) row.plan = plan;
+        if (row) {
+          row.plan = plan;
+          row._lastUpdated = Date.now();
+        }
       }
       await fetch('/api/admin/change-plan', {
         method: 'POST',
@@ -939,7 +952,7 @@ GRANT ALL ON TABLE public.users, public.ai_learning_memory, public.user_conversa
         body: JSON.stringify({ userId, email, plan })
       });
       showToast('⚡ تم تحديث الباقة إلى ' + plan + ' وحفظها فورياً في Supabase!');
-      setTimeout(() => fetchStatus(true), 400);
+      setTimeout(() => fetchStatus(true), 1200);
     }
 
     async function changeUserRole(userId, role, email = '') {

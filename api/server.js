@@ -2057,11 +2057,18 @@ app.post('/api/community/unblock-user', (req, res) => {
   res.json({ success: true, blockedUsers: db.communityHub.blockedUsers || [] });
 });
 
-app.post('/api/community/messages/:id/like', (req, res) => {
+app.post('/api/community/messages/:id/like', async (req, res) => {
   const { id } = req.params;
   const userEmail = String(req.body?.userEmail || '').trim().toLowerCase();
   if (db.communityHub.messages) {
-    const msg = db.communityHub.messages.find(m => m.id === id);
+    let msg = db.communityHub.messages.find(m => m.id === id);
+    if (!msg && dbManager && typeof dbManager.fetchCommunityMessagesFromSupabase === 'function') {
+      const supa = await dbManager.fetchCommunityMessagesFromSupabase(100);
+      if (supa) {
+        db.communityHub.messages = supa;
+        msg = db.communityHub.messages.find(m => m.id === id);
+      }
+    }
     if (msg) {
       if (!Array.isArray(msg.likedBy)) msg.likedBy = [];
       let isLiked = false;
@@ -2085,21 +2092,31 @@ app.post('/api/community/messages/:id/like', (req, res) => {
         msg.reactions.fire = [...msg.likedBy];
       }
       saveDb();
+      if (dbManager && typeof dbManager.updateMessageReactionsInSupabase === 'function') {
+        await dbManager.updateMessageReactionsInSupabase(id, msg.reactions, msg.likedBy, msg.likes);
+      }
       return res.json({ success: true, likes: msg.likes, likedBy: msg.likedBy, reactions: msg.reactions, isLiked });
     }
   }
   res.json({ success: false });
 });
 
-app.post('/api/community/messages/:id/react', (req, res) => {
+app.post('/api/community/messages/:id/react', async (req, res) => {
   const { id } = req.params;
   const userEmail = String(req.body?.userEmail || '').trim().toLowerCase();
   const reactionKey = String(req.body?.reactionKey || 'fire').trim().toLowerCase();
   const validKeys = ['fire', 'target', 'rocket', 'blood'];
   const key = validKeys.includes(reactionKey) ? reactionKey : 'fire';
 
-  if (db.communityHub.messages && userEmail) {
-    const msg = db.communityHub.messages.find(m => m.id === id);
+  if (userEmail) {
+    let msg = db.communityHub.messages ? db.communityHub.messages.find(m => m.id === id) : null;
+    if (!msg && dbManager && typeof dbManager.fetchCommunityMessagesFromSupabase === 'function') {
+      const supa = await dbManager.fetchCommunityMessagesFromSupabase(100);
+      if (supa) {
+        db.communityHub.messages = supa;
+        msg = db.communityHub.messages.find(m => m.id === id);
+      }
+    }
     if (msg) {
       if (!msg.reactions || typeof msg.reactions !== 'object') {
         msg.reactions = {
@@ -2124,6 +2141,9 @@ app.post('/api/community/messages/:id/react', (req, res) => {
         msg.likes = msg.likedBy.length;
       }
       saveDb();
+      if (dbManager && typeof dbManager.updateMessageReactionsInSupabase === 'function') {
+        await dbManager.updateMessageReactionsInSupabase(id, msg.reactions, msg.likedBy, msg.likes);
+      }
       return res.json({
         success: true,
         reactions: msg.reactions,
@@ -2160,17 +2180,11 @@ app.get('/api/auth/supabase-config', async (req, res) => {
   let supabaseUrl = (process.env.SUPABASE_URL || db.config.supabaseUrl || '').trim();
   let supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || db.config.supabaseKey || '').trim();
 
-  // Auto-detect if user swapped URL and KEY or pasted secret key into URL variable
-  if (supabaseUrl.startsWith('sb_') || supabaseUrl.startsWith('ey') || !supabaseUrl.startsWith('http')) {
-    if (supabaseUrl.startsWith('sb_') || supabaseUrl.startsWith('ey')) {
-      supabaseKey = supabaseUrl;
-    }
+  // Auto-detect if user swapped URL and KEY or pasted backend URL or secret key into URL variable
+  if (!supabaseUrl || !supabaseUrl.includes('.supabase.co') || supabaseUrl.includes('vercel.app') || supabaseUrl.startsWith('sb_') || supabaseUrl.startsWith('ey')) {
     supabaseUrl = 'https://krukhcmndvuklflxprvr.supabase.co';
   }
-  if (!supabaseUrl || !supabaseUrl.startsWith('http')) {
-    supabaseUrl = 'https://krukhcmndvuklflxprvr.supabase.co';
-  }
-  if (!supabaseKey || supabaseKey.includes('sb_secret__') || supabaseKey.length < 20) {
+  if (!supabaseKey || supabaseKey.includes('sb_secret__') || supabaseKey.length < 20 || supabaseKey.includes('vercel.app')) {
     supabaseKey = 'sb_publishable_MPI-lFS-ZRuopxnWXZGcbg_AwkhTSST';
   }
 
@@ -2491,16 +2505,20 @@ app.post('/api/auth/google-login', async (req, res) => {
 app.get('/api/users/me', async (req, res) => {
   const emailLower = String(req.query.email || '').trim().toLowerCase();
   if (!emailLower) return res.json({ success: false, notFound: true });
-  let user = db.users.find(u => u.email.toLowerCase() === emailLower);
 
-  if (!user && dbManager && typeof dbManager.fetchUsersFromSupabase === 'function') {
+  let user = null;
+  // Always query Supabase first for absolute live accuracy of Plan, Role & Status across serverless lambdas
+  if (dbManager && typeof dbManager.fetchUsersFromSupabase === 'function') {
     try {
       const supaUsers = await dbManager.fetchUsersFromSupabase();
       if (supaUsers && Array.isArray(supaUsers)) {
         db.users = supaUsers;
-        user = db.users.find(u => u.email.toLowerCase() === emailLower);
+        user = supaUsers.find(u => u.email.toLowerCase() === emailLower);
       }
     } catch (e) {}
+  }
+  if (!user) {
+    user = db.users.find(u => u.email.toLowerCase() === emailLower);
   }
 
   if (!user) return res.json({ success: false, notFound: true });

@@ -122,18 +122,12 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
     let url = (process.env.SUPABASE_URL || db.config.supabaseUrl || '').trim();
     let key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || db.config.supabaseKey || '').trim();
 
-    // Auto-detect if user swapped URL and KEY or pasted secret key into URL variable
-    if (url.startsWith('sb_') || url.startsWith('ey') || !url.startsWith('http')) {
-      if (url.startsWith('sb_') || url.startsWith('ey')) {
-        key = url;
-      }
+    // Auto-detect if user swapped URL and KEY or pasted backend URL or secret key into URL variable
+    if (!url || !url.includes('.supabase.co') || url.includes('vercel.app') || url.startsWith('sb_') || url.startsWith('ey')) {
       url = VERIFIED_SUPABASE_URL;
     }
-    if (!url || !url.startsWith('http')) {
-      url = VERIFIED_SUPABASE_URL;
-    }
-    // If key is broken (e.g. contains typo sb_secret__ with double underscore or is invalid)
-    if (!key || key.includes('sb_secret__') || key.length < 20) {
+    // If key is broken, empty, or contaminated with domain
+    if (!key || key.includes('sb_secret__') || key.length < 20 || key.includes('vercel.app')) {
       key = VERIFIED_FALLBACK_KEY;
     }
 
@@ -693,6 +687,42 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
     }
   }
 
+  async function updateMessageReactionsInSupabase(id, reactions, likedBy, likes) {
+    if (!supabase) initSupabaseClient();
+    if (!supabase || !id) return false;
+    try {
+      const { data: existing } = await supabase
+        .from('community_messages')
+        .select('signal_data')
+        .eq('id', id)
+        .limit(1);
+
+      const existingSignal = (existing && existing[0]?.signal_data) || {};
+      const updatedSignal = {
+        ...existingSignal,
+        reactions: reactions || { fire: [], target: [], rocket: [], blood: [] },
+        likedBy: Array.isArray(likedBy) ? likedBy : []
+      };
+
+      const { error } = await supabase
+        .from('community_messages')
+        .update({
+          likes: Number(likes) || (Array.isArray(likedBy) ? likedBy.length : 0),
+          signal_data: updatedSignal
+        })
+        .eq('id', id);
+
+      if (error) {
+        console.warn('Supabase update reactions error:', error.message);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.warn('Supabase update reactions exception:', e.message);
+      return false;
+    }
+  }
+
   async function fetchCommunityMessagesFromSupabase(limit = 100) {
     if (!supabase) initSupabaseClient();
     if (!supabase) return null;
@@ -707,30 +737,37 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
         return null;
       }
       if (data && Array.isArray(data)) {
-        return data.map(m => ({
-          id: m.id,
-          senderEmail: m.sender_email,
-          senderUsername: m.sender_email ? m.sender_email.split('@')[0] : 'trader',
-          senderName: m.sender_name || 'Trader',
-          role: m.role || 'VIP TRADER',
-          isAdmin: Boolean(m.is_admin),
-          badge: m.badge || 'VIP',
-          tag: m.tag || '#DISCUSSION',
-          theme: m.theme || 'platinum',
-          type: m.type || 'CHAT',
-          category: m.category || 'NORMAL',
-          content: m.content || '',
-          signalData: m.signal_data || null,
-          audioData: m.audio_data || null,
-          audioDuration: m.audio_duration || null,
-          avatarText: m.avatar_text || 'TR',
-          time: m.time_label || '00:00',
-          likes: Number(m.likes) || 0,
-          likedBy: [],
-          reactions: { fire: [], target: [], rocket: [], blood: [] },
-          isPinned: Boolean(m.is_pinned),
-          createdAt: m.created_at
-        }));
+        return data.map(m => {
+          const sig = m.signal_data || {};
+          const defaultReactions = { fire: [], target: [], rocket: [], blood: [] };
+          const reactions = (sig && typeof sig.reactions === 'object' && sig.reactions) ? sig.reactions : defaultReactions;
+          const likedBy = (sig && Array.isArray(sig.likedBy)) ? sig.likedBy : (reactions.fire || []);
+
+          return {
+            id: m.id,
+            senderEmail: m.sender_email,
+            senderUsername: m.sender_email ? m.sender_email.split('@')[0] : 'trader',
+            senderName: m.sender_name || 'Trader',
+            role: m.role || 'VIP TRADER',
+            isAdmin: Boolean(m.is_admin),
+            badge: m.badge || 'VIP',
+            tag: m.tag || '#DISCUSSION',
+            theme: m.theme || 'platinum',
+            type: m.type || 'CHAT',
+            category: m.category || 'NORMAL',
+            content: m.content || '',
+            signalData: m.signal_data || null,
+            audioData: m.audio_data || null,
+            audioDuration: m.audio_duration || null,
+            avatarText: m.avatar_text || 'TR',
+            time: m.time_label || '00:00',
+            likes: Number(m.likes) || likedBy.length || 0,
+            likedBy: likedBy,
+            reactions: reactions,
+            isPinned: Boolean(m.is_pinned),
+            createdAt: m.created_at
+          };
+        });
       }
     } catch (e) {
       console.warn('Supabase fetch community messages exception:', e.message);
@@ -767,22 +804,41 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
     lastSupabaseSyncReport.lastAttemptAt = new Date().toISOString();
 
     try {
-      // 1. Sync Users
-      const userRows = (db.users || []).map(user => ({
-        id: user.id,
-        email: (user.email || '').toLowerCase(),
-        name: user.name || 'Trader',
-        avatar: user.avatar || null,
-        plan: user.plan || 'FREE',
-        role: user.role || 'USER',
-        status: user.status || 'Active',
-        balance: Number(user.balance) || 0,
-        risk_percent: Number(user.riskPercent) || 1,
-        has_accepted_rules: Boolean(user.hasAcceptedCommunityRules),
-        total_chats: Number(user.totalChats) || 0,
-        total_trades: Number(user.totalTrades) || 0,
-        last_login_at: user.lastLoginAt || new Date().toISOString()
-      }));
+      // 1. Sync Users: Protect Supabase as Single Source of Truth
+      // Fetch latest users from Supabase so we never overwrite upgraded plans with stale local defaults!
+      const existingSupaUsers = await fetchUsersFromSupabase();
+      const supaUserMap = new Map();
+      if (existingSupaUsers && Array.isArray(existingSupaUsers)) {
+        for (const su of existingSupaUsers) {
+          if (su.email) supaUserMap.set(su.email.toLowerCase(), su);
+        }
+      }
+
+      const userRows = (db.users || []).map(user => {
+        const emailLower = (user.email || '').toLowerCase();
+        const fromSupa = supaUserMap.get(emailLower);
+        return {
+          id: user.id || fromSupa?.id,
+          email: emailLower,
+          username: fromSupa?.username || user.username || (emailLower ? emailLower.split('@')[0] : 'trader'),
+          name: fromSupa?.name || user.name || 'Trader',
+          avatar: fromSupa?.avatar || user.avatar || null,
+          plan: fromSupa?.plan || user.plan || 'FREE', // ALWAYS prioritize Supabase's upgraded plan!
+          role: fromSupa?.role || user.role || 'USER', // ALWAYS prioritize Supabase's role!
+          status: fromSupa?.status || user.status || 'Active',
+          balance: fromSupa?.balance !== undefined ? fromSupa.balance : (Number(user.balance) || 0),
+          risk_percent: fromSupa?.riskPercent !== undefined ? fromSupa.riskPercent : (Number(user.riskPercent) || 1),
+          has_accepted_rules: fromSupa?.hasAcceptedCommunityRules !== undefined ? fromSupa.hasAcceptedCommunityRules : Boolean(user.hasAcceptedCommunityRules),
+          total_chats: Math.max(fromSupa?.totalChats || 0, Number(user.totalChats) || 0),
+          total_trades: Math.max(fromSupa?.totalTrades || 0, Number(user.totalTrades) || 0),
+          last_login_at: fromSupa?.lastLoginAt || user.lastLoginAt || new Date().toISOString()
+        };
+      });
+
+      // Update in-memory db.users so it reflects Supabase's latest plans
+      if (existingSupaUsers && existingSupaUsers.length > 0) {
+        db.users = existingSupaUsers;
+      }
 
       lastSupabaseSyncReport.syncedUsers = userRows.length;
       if (userRows.length > 0) {
@@ -1399,6 +1455,7 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
     deleteUserFromSupabase,
     syncCommunityMessageToSupabase,
     fetchCommunityMessagesFromSupabase,
+    updateMessageReactionsInSupabase,
     deleteCommunityMessageFromSupabase
   };
 }
