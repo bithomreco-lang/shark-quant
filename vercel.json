@@ -15,11 +15,11 @@
     },
     {
       "source": "/admin",
-      "destination": "/admin/index.html"
+      "destination": "/api/index.js"
     },
     {
       "source": "/admin/(.*)",
-      "destination": "/admin/index.html"
+      "destination": "/api/index.js"
     },
     {
       "source": "/app",

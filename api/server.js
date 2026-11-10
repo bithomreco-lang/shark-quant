@@ -14,6 +14,23 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// 🌐 Unified Production Dynamic Serving for Admin (Zero Cache)
+app.get(['/admin', '/admin/', '/admin/index.html'], (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, proxy-revalidate');
+  const possiblePaths = [
+    path.resolve(__dirname, '..', 'admin', 'index.html'),
+    path.resolve(__dirname, 'admin', 'index.html'),
+    path.resolve(process.cwd(), 'admin', 'index.html'),
+    path.resolve(process.cwd(), 'shark_landing_site', 'admin', 'index.html')
+  ];
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      return res.sendFile(p);
+    }
+  }
+  return res.status(404).send('Admin panel file not found');
+});
+
 // 🌐 Unified Production Static Serving (Landing Site, App, Admin, Downloads & _expo)
 const LANDING_DIR = path.resolve(__dirname, '..', 'shark_landing_site');
 if (fs.existsSync(LANDING_DIR)) {
@@ -630,9 +647,9 @@ Critical: The live interactive TradingView chart is ALREADY displayed to the use
 }
 
 // ══════════════════════════════════════════════
-// CHAT ENDPOINT
+// CHAT & LIVE VOICE TURN ENDPOINTS
 // ══════════════════════════════════════════════
-app.post('/api/chat', async (req, res) => {
+const handleChatRequest = async (req, res) => {
   const {
     userEmail,
     sessionId = 'session_1',
@@ -1238,6 +1255,23 @@ TRADER PROFILE: Name: ${userName}, Plan: ${userPlan}, Capital: $${userBalance}.$
   }
 
   return res.json({ reply: null, isApiError: true, isQuotaError: false, chart: null, shouldHangup: false, sessionId, isRealApiKey: false });
+};
+
+app.post('/api/chat', handleChatRequest);
+
+// 📞 Instant Live Voice Turn (Serverless & Real-time Two-Way Audio)
+app.post('/api/live-turn', async (req, res) => {
+  try {
+    req.body = req.body || {};
+    req.body.message = req.body.text || req.body.message || 'سلام خويا الحوت';
+    req.body.isLiveCall = true;
+    req.body.isVoiceQuery = true;
+    req.body.userEmail = req.body.userEmail || 'trader@shark.ai';
+    return handleChatRequest(req, res);
+  } catch (err) {
+    console.error('live-turn error:', err);
+    return res.status(500).json({ reply: 'أهلاً خويا! أنا معك على الخط المباشر، عاود سولني.' });
+  }
 });
 
 // ══════════════════════════════════════════════
