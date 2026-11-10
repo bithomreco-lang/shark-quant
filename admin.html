@@ -569,7 +569,22 @@
           <span class="info-val">SMC & ICT Liquidity Sweeps</span>
         </div>
 
-        <button class="btn-action-glow" style="background:#FFE600; color:#000;" onclick="testAiEngine()">⚡ فحص استجابة محرك الذكاء الآن</button>
+        <!-- Update Gemini API Key Section -->
+        <div style="margin-top: 14px; padding-top: 14px; border-top: 1px dashed rgba(255, 230, 0, 0.25);">
+          <label style="display:block; font-size:12px; font-weight:800; color:#FFE600; margin-bottom:8px;">
+            🔑 تغيير أو تحديث مفتاح Google Gemini API Key:
+          </label>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="newGeminiKeyInput" placeholder="ألصق مفتاح Gemini الجديد هنا (AIzaSy...)..."
+              style="flex:1; background:#07090E; border:1px solid #FFE600; border-radius:8px; padding:10px 14px; color:#FFF; font-size:12px; outline:none;" />
+            <button class="btn-action-glow" style="background:#FFE600; color:#07090E; border:none; padding:10px 18px; font-weight:900; white-space:nowrap;"
+              onclick="updateGeminiKeyNow()">
+              💾 حفظ وتفعيل المفتاح
+            </button>
+          </div>
+        </div>
+
+        <button class="btn-action-glow" style="background:#182236; color:#FFE600; border:1px solid #FFE600; margin-top:12px;" onclick="testAiEngine()">⚡ فحص استجابة محرك الذكاء الآن</button>
       </div>
     </div>
 
@@ -873,6 +888,33 @@ GRANT ALL ON TABLE public.users, public.ai_learning_memory, public.user_conversa
         }
       } catch (e) {
         showToast('خطأ في استجابة الذكاء');
+      }
+    }
+
+    async function updateGeminiKeyNow() {
+      const input = document.getElementById('newGeminiKeyInput');
+      const key = (input.value || '').trim();
+      if (!key || key.length < 8) {
+        alert('يرجى لصق مفتاح Gemini API صحيح!');
+        return;
+      }
+      try {
+        showToast('⏳ جاري حفظ وتفعيل مفتاح Gemini الجديد...');
+        const res = await fetch('/api/admin/update-config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiKey: key })
+        });
+        const data = await res.json();
+        if (data.success) {
+          input.value = '';
+          showToast('✅ تم حفظ وتفعيل مفتاح Gemini الجديد فوراً في السيرفر!');
+          fetchStatus(true);
+        } else {
+          alert('حدث خطأ أثناء حفظ المفتاح: ' + (data.message || ''));
+        }
+      } catch (e) {
+        alert('فشل الاتصال بالسيرفر: ' + e.message);
       }
     }
 

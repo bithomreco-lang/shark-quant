@@ -1565,10 +1565,21 @@ app.get('/api/tts', async (req, res) => {
 // ══════════════════════════════════════════════
 // ADMIN ENDPOINTS (WITH SUPABASE CLOUD & AI MEMORY INSPECTOR)
 // ══════════════════════════════════════════════
-app.get('/api/admin/status', (req, res) => {
+app.get('/api/admin/status', async (req, res) => {
+  let usersList = db.users;
+  if (dbManager.isSupabaseConnected()) {
+    try {
+      const supaUsers = await dbManager.fetchUsersFromSupabase();
+      if (supaUsers && supaUsers.length > 0) {
+        usersList = supaUsers;
+        db.users = supaUsers;
+      }
+    } catch (e) {}
+  }
+
   res.json({
-    totalUsers: db.users.length,
-    activeSubscribers: db.users.filter(u => u.status === 'Active').length,
+    totalUsers: usersList.length,
+    activeSubscribers: usersList.filter(u => u.status === 'Active').length,
     hasApiKey: Boolean(db.config.apiKey && db.config.apiKey.length > 5),
     apiKeyMasked: db.config.apiKey ? db.config.apiKey.substring(0, 6) + '...' + db.config.apiKey.slice(-4) : 'NOT SET',
     model: db.config.model || 'gemini-3-flash-preview',
@@ -1576,7 +1587,7 @@ app.get('/api/admin/status', (req, res) => {
     supabaseSyncReport: dbManager.getSupabaseSyncReport(),
     supabaseUrl: db.config.supabaseUrl || process.env.SUPABASE_URL || '',
     hasSupabaseKey: Boolean((db.config.supabaseKey && db.config.supabaseKey.length > 10) || process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY),
-    users: db.users,
+    users: usersList,
     aiLearningMemory: db.aiLearningMemory,
     communityPulse: db.communityHub?.marketPulse || null
   });
@@ -1584,23 +1595,28 @@ app.get('/api/admin/status', (req, res) => {
 
 app.post('/api/admin/update-config', async (req, res) => {
   const { apiKey, model, systemInstruction, supabaseUrl, supabaseKey } = req.body;
-  if (apiKey && apiKey.trim().length > 10) db.config.apiKey = apiKey.trim();
+  if (apiKey && apiKey.trim().length > 5) {
+    db.config.apiKey = apiKey.trim();
+  }
   if (model) db.config.model = model;
   if (systemInstruction && systemInstruction.trim().length > 10) db.config.systemInstruction = systemInstruction.trim();
-  if (supabaseUrl !== undefined) db.config.supabaseUrl = supabaseUrl.trim();
-  if (supabaseKey !== undefined && supabaseKey.trim().length > 10) db.config.supabaseKey = supabaseKey.trim();
+  if (supabaseUrl !== undefined && supabaseUrl.trim().length > 5) db.config.supabaseUrl = supabaseUrl.trim();
+  if (supabaseKey !== undefined && supabaseKey.trim().length > 5) db.config.supabaseKey = supabaseKey.trim();
+  
   const supaConnected = dbManager.initSupabaseClient();
   saveDb();
   let syncReport = null;
   if (supaConnected) {
     syncReport = await dbManager.syncAllDataToSupabase();
   }
-  console.log('✅ Admin updated config. Key:', db.config.apiKey.substring(0, 8) + '... | Supabase:', supaConnected);
+  console.log('✅ Admin updated config. Key:', db.config.apiKey ? db.config.apiKey.substring(0, 6) + '...' : 'none');
   res.json({
     success: true,
     supabaseConnected: supaConnected,
     supabaseSyncReport: syncReport,
-    message: 'Configuration saved and active immediately.'
+    hasApiKey: Boolean(db.config.apiKey && db.config.apiKey.length > 5),
+    apiKeyMasked: db.config.apiKey ? db.config.apiKey.substring(0, 6) + '...' + db.config.apiKey.slice(-4) : 'NOT SET',
+    message: 'تم حفظ وتفعيل الإعدادات والمفتاح الجديد فوراً!'
   });
 });
 
@@ -1610,8 +1626,8 @@ app.post('/api/admin/sync-supabase', async (req, res) => {
 });
 
 app.post('/api/admin/toggle-user', async (req, res) => {
-  const { userId } = req.body;
-  const user = db.users.find(u => u.id === userId);
+  const { userId, email } = req.body;
+  const user = db.users.find(u => (userId && u.id === userId) || (email && u.email.toLowerCase() === String(email).toLowerCase()));
   if (user) {
     user.status = user.status === 'Active' ? 'Suspended' : 'Active';
     if (!db.communityHub.blockedUsers) db.communityHub.blockedUsers = [];
@@ -1628,7 +1644,7 @@ app.post('/api/admin/toggle-user', async (req, res) => {
       );
     }
     saveDb();
-    await dbManager.syncUserToSupabase(user);
+    await dbManager.updateUserStatusInSupabase(user.email, user.status);
     res.json({ success: true, newStatus: user.status, user });
   } else {
     res.status(404).json({ error: 'User not found' });
@@ -1640,14 +1656,19 @@ app.post('/api/admin/change-plan', async (req, res) => {
   const user = db.users.find(
     u => (userId && u.id === userId) || (email && u.email.toLowerCase() === String(email).toLowerCase())
   );
+  const targetEmail = (email || (user ? user.email : '')).toLowerCase();
+
   if (user && plan) {
     user.plan = plan;
-    saveDb();
-    await dbManager.syncUserToSupabase(user);
-    res.json({ success: true, user });
-  } else {
-    res.status(404).json({ error: 'User not found' });
   }
+  saveDb();
+
+  // Directly and permanently update Supabase PostgreSQL!
+  if (targetEmail && plan) {
+    await dbManager.updateUserPlanInSupabase(targetEmail, plan);
+  }
+
+  res.json({ success: true, user: user || { email: targetEmail, plan } });
 });
 
 app.post('/api/admin/change-role', async (req, res) => {
@@ -1655,24 +1676,33 @@ app.post('/api/admin/change-role', async (req, res) => {
   const user = db.users.find(
     u => (userId && u.id === userId) || (email && u.email.toLowerCase() === String(email).toLowerCase())
   );
+  const targetEmail = (email || (user ? user.email : '')).toLowerCase();
+
   if (user && role) {
     user.role = String(role).toUpperCase() === 'ADMIN' ? 'ADMIN' : 'USER';
-    saveDb();
-    await dbManager.syncUserToSupabase(user);
-    res.json({ success: true, user });
-  } else {
-    res.status(404).json({ error: 'User not found' });
   }
+  saveDb();
+
+  if (targetEmail && role) {
+    await dbManager.updateUserRoleInSupabase(targetEmail, user ? user.role : role);
+  }
+
+  res.json({ success: true, user: user || { email: targetEmail, role } });
 });
 
 app.post('/api/admin/delete-user', async (req, res) => {
-  const { userId } = req.body;
-  const removed = await dbManager.deleteUserById(userId);
-  if (removed) {
-    res.json({ success: true, removed });
-  } else {
-    res.status(404).json({ error: 'User not found' });
+  const { userId, email } = req.body;
+  const user = db.users.find(u => (userId && u.id === userId) || (email && u.email.toLowerCase() === String(email).toLowerCase()));
+  const targetEmail = (email || (user ? user.email : '')).toLowerCase();
+  
+  if (user) {
+    db.users = db.users.filter(u => u !== user);
+    saveDb();
   }
+  if (targetEmail) {
+    await dbManager.deleteUserFromSupabase(targetEmail);
+  }
+  res.json({ success: true });
 });
 
 app.get('/api/sessions', (req, res) => {
@@ -2408,18 +2438,12 @@ app.post('/api/users/update-profile', async (req, res) => {
 });
 
 app.post('/api/users/upgrade-plan', async (req, res) => {
-  const { email, plan } = req.body;
-  if (!email || !plan) return res.status(400).json({ error: 'Email and plan required' });
-
-  const emailLower = email.trim().toLowerCase();
-  let user = db.users?.find(u => u.email.toLowerCase() === emailLower);
-  if (user) {
-    user.plan = plan;
-    saveDb();
-    await dbManager.syncUserToSupabase(user);
-    return res.json({ success: true, user });
-  }
-  res.status(404).json({ error: 'User not found' });
+  // Self-upgrade disabled: Only ADMIN can upgrade or activate plans!
+  return res.status(403).json({
+    success: false,
+    requiresAdmin: true,
+    message: '🔒 ترقية وتفعيل الباقات يتطلب موافقة وتفعيل من إدارة Shark Traders AI (Admin Activation Required).'
+  });
 });
 
 // Sync AI Chat Sessions to Structured Database & Supabase

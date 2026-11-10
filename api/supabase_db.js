@@ -425,6 +425,10 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
   }
 
   // ── Save Clean Structured JSON & Push Async to Supabase if Configured ──
+  const actualDbPath = process.env.VERCEL
+    ? path.join('/tmp', 'database.json')
+    : (dbFilePath || path.join(__dirname, 'database.json'));
+
   let saveTimer = null;
   function saveDb() {
     syncAliases();
@@ -447,12 +451,14 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
           userConversations: db.userConversations,
           communityHub: db.communityHub
         };
-        fs.writeFileSync(dbFilePath, JSON.stringify(cleanDiskSnapshot, null, 2));
+        try {
+          fs.writeFileSync(actualDbPath, JSON.stringify(cleanDiskSnapshot, null, 2));
+        } catch (fErr) {}
         if (supabase) {
           syncAllDataToSupabase().catch(() => { });
         }
       } catch (err) {
-        console.error('Error writing structured database.json:', err.message);
+        console.error('Error writing structured database:', err.message);
       }
     }, 150);
   }
@@ -460,29 +466,121 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
   // ── Load from Disk on Startup ──
   function loadDb() {
     try {
-      if (fs.existsSync(dbFilePath)) {
-        const rawText = fs.readFileSync(dbFilePath, 'utf8');
+      if (process.env.VERCEL && !fs.existsSync(actualDbPath)) {
+        if (fs.existsSync(dbFilePath)) {
+          try { fs.copyFileSync(dbFilePath, actualDbPath); } catch (e) {}
+        }
+      }
+      const fileToRead = fs.existsSync(actualDbPath) ? actualDbPath : dbFilePath;
+      if (fs.existsSync(fileToRead)) {
+        const rawText = fs.readFileSync(fileToRead, 'utf8');
         const parsed = JSON.parse(rawText);
         sanitizeAndMigrateExistingDb(parsed);
-        saveDb();
-      } else {
-        saveDb();
       }
     } catch (err) {
-      console.error('Error loading database.json, starting clean:', err.message);
+      console.error('Error loading database, starting clean:', err.message);
     }
     initSupabaseClient();
+  }
+
+  // ── Direct Supabase Cloud Queries (Rock-solid PostgreSQL persistence) ──
+  async function fetchUsersFromSupabase() {
+    if (!supabase) return null;
+    try {
+      const { data, error } = await supabase.from('users').select('*').order('joined_at', { ascending: false });
+      if (error) {
+        console.warn('Supabase fetch users warning:', error.message);
+        return null;
+      }
+      if (data && Array.isArray(data)) {
+        return data.map(u => ({
+          id: u.id || ('usr_' + Buffer.from(u.email || '').toString('hex').slice(0, 8)),
+          email: u.email,
+          username: u.username || (u.email ? u.email.split('@')[0] : 'trader'),
+          name: u.name || u.username || 'Trader',
+          avatar: u.avatar || '',
+          plan: u.plan || 'FREE',
+          role: u.role || 'USER',
+          status: u.status || 'Active',
+          balance: Number(u.balance) || 0,
+          riskPercent: Number(u.risk_percent) || 1,
+          hasAcceptedCommunityRules: Boolean(u.has_accepted_rules),
+          totalChats: Number(u.total_chats) || 0,
+          totalTrades: Number(u.total_trades) || 0,
+          joinedAt: u.joined_at ? u.joined_at.split('T')[0] : '2026-11-10',
+          lastLoginAt: u.last_login_at || new Date().toISOString()
+        }));
+      }
+    } catch (e) {
+      console.warn('Supabase fetch users exception:', e.message);
+    }
+    return null;
+  }
+
+  async function updateUserPlanInSupabase(email, plan) {
+    if (!supabase || !email) return false;
+    try {
+      const emailLower = email.trim().toLowerCase();
+      const { error } = await supabase.from('users').update({
+        plan: plan,
+        last_login_at: new Date().toISOString()
+      }).eq('email', emailLower);
+
+      if (error) {
+        console.error('Supabase updateUserPlanInSupabase error:', error.message);
+        return false;
+      }
+      console.log(`✅ Supabase plan saved permanently for ${emailLower} -> ${plan}`);
+      return true;
+    } catch (e) {
+      console.error('Supabase updateUserPlanInSupabase exception:', e.message);
+      return false;
+    }
+  }
+
+  async function updateUserRoleInSupabase(email, role) {
+    if (!supabase || !email) return false;
+    try {
+      const emailLower = email.trim().toLowerCase();
+      const { error } = await supabase.from('users').update({ role }).eq('email', emailLower);
+      return !error;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async function updateUserStatusInSupabase(email, status) {
+    if (!supabase || !email) return false;
+    try {
+      const emailLower = email.trim().toLowerCase();
+      const { error } = await supabase.from('users').update({ status }).eq('email', emailLower);
+      return !error;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async function deleteUserFromSupabase(email) {
+    if (!supabase || !email) return false;
+    try {
+      const emailLower = email.trim().toLowerCase();
+      const { error } = await supabase.from('users').delete().eq('email', emailLower);
+      return !error;
+    } catch (e) {
+      return false;
+    }
   }
 
   // ── Cloud Sync Helpers (Non-blocking background sync to Supabase PostgreSQL) ──
   async function syncUserToSupabase(user) {
     if (!supabase || !user || !user.email) return;
     try {
+      const safeName = (user.name && user.name.trim()) || user.username || user.email.split('@')[0] || 'Trader';
       await supabase.from('users').upsert({
-        id: user.id,
+        id: user.id || ('usr_' + Date.now()),
         email: user.email.toLowerCase(),
-        name: user.name,
-        avatar: user.avatar,
+        name: safeName,
+        avatar: user.avatar || '',
         plan: user.plan || 'FREE',
         role: user.role || 'USER',
         status: user.status || 'Active',
@@ -1190,7 +1288,12 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
     buildTraderIntelligenceContext,
     syncUserConversations,
     getOrCreateAiSessionContext,
-    syncUserToSupabase
+    syncUserToSupabase,
+    fetchUsersFromSupabase,
+    updateUserPlanInSupabase,
+    updateUserRoleInSupabase,
+    updateUserStatusInSupabase,
+    deleteUserFromSupabase
   };
 }
 
