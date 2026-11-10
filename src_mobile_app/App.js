@@ -1825,43 +1825,19 @@ export default function App() {
       proc.connect(mute);
       mute.connect(ctx.destination);
       const ratio = ctx.sampleRate / 16000;
-      let pcmAccumulator = [];
-      const TARGET_SAMPLES = 1600; // 100ms of 16kHz audio (optimal chunk size for Google Live VAD)
-
       proc.onaudioprocess = (e) => {
         if (!liveCallActiveRef.current || callMicMutedRef.current || ws.readyState !== 1) return;
         const input = e.inputBuffer.getChannelData(0);
-
-        // Echo protection: If AI is actively speaking, ignore quiet speaker bleed into mic unless user talks loudly to barge-in
-        if (isAiSpeakingRef.current) {
-          let sum = 0;
-          for (let i = 0; i < input.length; i++) sum += input[i] * input[i];
-          const rms = Math.sqrt(sum / input.length);
-          if (rms < 0.045) return;
-        }
-
         const outLen = Math.floor(input.length / ratio);
+        const pcm = new Int16Array(outLen);
         for (let i = 0; i < outLen; i++) {
           const s = Math.max(-1, Math.min(1, input[Math.floor(i * ratio)]));
-          pcmAccumulator.push(s < 0 ? s * 0x8000 : s * 0x7fff);
+          pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
         }
-
-        if (pcmAccumulator.length >= TARGET_SAMPLES) {
-          const pcm = new Int16Array(pcmAccumulator);
-          pcmAccumulator = [];
-          const bytes = new Uint8Array(pcm.buffer);
-          let bin = '';
-          for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-          const b64 = window.btoa(bin);
-
-          ws.send(JSON.stringify({
-            type: 'audio',
-            data: b64,
-            realtimeInput: {
-              mediaChunks: [{ mimeType: 'audio/pcm;rate=16000', data: b64 }]
-            }
-          }));
-        }
+        const bytes = new Uint8Array(pcm.buffer);
+        let bin = '';
+        for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+        ws.send(JSON.stringify({ type: 'audio', data: window.btoa(bin) }));
       };
     } catch (e) {
       console.warn('Audio processor init error:', e);
