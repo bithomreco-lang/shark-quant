@@ -1304,6 +1304,12 @@ export default function App() {
   const callScreenStreamRef = useRef(null);
   const callScreenTimerRef = useRef(null);
 
+  // 🌐 Live In-App Browser & Real-time Web Reader
+  const [inAppBrowserVisible, setInAppBrowserVisible] = useState(false);
+  const [inAppBrowserUrl, setInAppBrowserUrl] = useState('');
+  const [inAppBrowserTitle, setInAppBrowserTitle] = useState('');
+  const [inAppBrowserSummary, setInAppBrowserSummary] = useState('');
+
   const liveCallActiveRef = useRef(false);
   const liveCallRecogRef = useRef(null);
   const liveCallAudioRef = useRef(null);
@@ -1605,6 +1611,21 @@ export default function App() {
         break;
       case 'chart':
         setCallActiveChart(m.chart);
+        break;
+      case 'open_browser':
+        setInAppBrowserUrl(m.url);
+        setInAppBrowserTitle(m.title || 'Live Web Source');
+        setInAppBrowserSummary(m.summary || '');
+        setInAppBrowserVisible(true);
+        break;
+      case 'community_post_created':
+        if (m.post) {
+          setCommunityMessages((prev) => {
+            if (prev.some(p => p.id === m.post.id)) return prev;
+            return [...prev, m.post];
+          });
+          showAppToast(`🦈 تم نشر رسالتك في مجتمع المتداولين بنجاح!`);
+        }
         break;
       case 'hangup':
         callHangupRef.current = true;
@@ -6718,6 +6739,69 @@ export default function App() {
         </View>
       </Modal>
 
+      {/* 🌐 LIVE IN-APP BROWSER & WEB READER MODAL */}
+      <Modal visible={inAppBrowserVisible} transparent animationType="slide">
+        <View style={styles.browserModalOverlay}>
+          <View style={styles.browserModalContainer}>
+            {/* Header / URL Bar */}
+            <View style={styles.browserHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginRight: 8 }}>
+                <View style={styles.browserDotLive} />
+                <View style={styles.browserUrlBadge}>
+                  <Text style={{ fontSize: 13 }}>🌐</Text>
+                  <Text style={styles.browserUrlText} numberOfLines={1}>{inAppBrowserTitle || inAppBrowserUrl}</Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <TouchableOpacity
+                  style={styles.browserExtBtn}
+                  onPress={() => openExternalLink(inAppBrowserUrl)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.browserExtBtnText}>فتح خارجي ↗</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.browserCloseBtn}
+                  onPress={() => setInAppBrowserVisible(false)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.browserCloseBtnText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* AI Summary Banner */}
+            {inAppBrowserSummary ? (
+              <View style={styles.browserSummaryBanner}>
+                <Text style={styles.browserSummarySharkTag}>🦈 تحليل الحوت اللحظي للصفحة:</Text>
+                <Text style={styles.browserSummaryText}>{inAppBrowserSummary}</Text>
+              </View>
+            ) : null}
+
+            {/* Live Web Content Frame */}
+            {Platform.OS === 'web' ? (
+              <iframe
+                src={inAppBrowserUrl}
+                style={{ width: '100%', height: 480, border: 'none', backgroundColor: '#0A0D14', borderRadius: 8 }}
+                title={inAppBrowserTitle || 'Live Web Browser'}
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+              />
+            ) : null}
+
+            {/* In-Call Web Bottom Bar */}
+            <View style={styles.browserBottomBar}>
+              <Text style={styles.browserBottomNote}>💡 الحوت يحلل هذه الصفحة معك صوتياً في المكالمة المباشرة</Text>
+              <TouchableOpacity
+                style={styles.browserOpenDirectBtn}
+                onPress={() => openExternalLink(inAppBrowserUrl)}
+              >
+                <Text style={styles.browserOpenDirectText}>عرض في نافذة كاملة ↗</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Google Account Switcher via Supabase OAuth (No manual email typing) */}
       <Modal visible={authModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -10984,5 +11068,136 @@ const styles = StyleSheet.create({
     color: '#000',
     fontSize: 11,
     fontWeight: '900',
+  },
+  // In-App Browser Styles
+  browserModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 12,
+  },
+  browserModalContainer: {
+    width: '100%',
+    maxWidth: 620,
+    maxHeight: '92%',
+    backgroundColor: '#0A0D14',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#00F0FF',
+    overflow: 'hidden',
+    shadowColor: '#00F0FF',
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+  },
+  browserHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#111622',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  browserDotLive: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#00FF66',
+  },
+  browserUrlBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#182030',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#222E45',
+    flex: 1,
+  },
+  browserUrlText: {
+    color: '#00F0FF',
+    fontSize: 12,
+    fontWeight: '700',
+    flex: 1,
+  },
+  browserExtBtn: {
+    backgroundColor: 'rgba(0, 255, 102, 0.15)',
+    borderWidth: 1,
+    borderColor: '#00FF66',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  browserExtBtnText: {
+    color: '#00FF66',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  browserCloseBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#202836',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  browserCloseBtnText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  browserSummaryBanner: {
+    backgroundColor: '#131A26',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 240, 255, 0.2)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  browserSummarySharkTag: {
+    color: '#FFE600',
+    fontSize: 11,
+    fontWeight: '900',
+    marginBottom: 2,
+    textAlign: 'right',
+  },
+  browserSummaryText: {
+    color: '#E2E8F0',
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'right',
+  },
+  browserBottomBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#111622',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    gap: 8,
+  },
+  browserBottomNote: {
+    color: '#8A9DB4',
+    fontSize: 11,
+    flex: 1,
+    textAlign: 'right',
+  },
+  browserOpenDirectBtn: {
+    backgroundColor: '#1F293D',
+    borderWidth: 1,
+    borderColor: '#374765',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  browserOpenDirectText: {
+    color: '#00F0FF',
+    fontSize: 11,
+    fontWeight: '800',
   },
 });

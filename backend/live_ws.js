@@ -53,6 +53,52 @@ const TOOLS = [{
       }
     },
     {
+      name: 'post_to_community',
+      description: 'Post a message, trade setup, or analysis to the Shark Community Hub on behalf of this user under their actual name and profile. Call it whenever the user asks you to write, post, or share something in the community (e.g. "اكتب رسالة فالمجتمع", "شارك هاد التحليل فالمجتمع", "حط صفقة").',
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          content: { type: 'STRING', description: 'The exact message text to publish into the community feed on behalf of the user.' },
+          tag: { type: 'STRING', description: 'Tag for the message', enum: ['ANALYSIS', 'ALERT', 'SIGNAL', 'CHAT', 'SETUP'] }
+        },
+        required: ['content']
+      }
+    },
+    {
+      name: 'read_community_discussions',
+      description: 'Read the latest discussions and messages from other traders in the Shark Community Hub to know what everyone is discussing, fearing, or buying right now. Call whenever the user asks what traders/members are saying in the community.',
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          topic: { type: 'STRING', description: 'Optional keyword to filter discussions, e.g. gold, btc, fed' }
+        }
+      }
+    },
+    {
+      name: 'open_in_app_browser',
+      description: 'Open a sleek live in-app browser window on the user screen showing any website, news article, or financial source (Investing.com, ForexFactory, Reuters, CoinDesk, Bloomberg, TradingView, or any URL). Call whenever the user asks to open, browse, see, or visit any website or link.',
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          url: { type: 'STRING', description: 'The website URL to open, e.g. https://www.forexfactory.com or https://www.investing.com' },
+          title: { type: 'STRING', description: 'Title or name of the website or article' },
+          summary: { type: 'STRING', description: 'Short 1-2 sentence Moroccan Darija summary of what this page contains and how it impacts the market.' }
+        },
+        required: ['url']
+      }
+    },
+    {
+      name: 'browse_and_analyze_web',
+      description: 'Fast live web reader and scraper that enters any financial site or URL, reads its actual text and breaking reports in real-time, extracts key numbers, and reports them to the user. Call whenever the user asks you to read, scrape, or deeply analyze any website or link.',
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          url: { type: 'STRING', description: 'The URL to visit and analyze' }
+        },
+        required: ['url']
+      }
+    },
+    {
       name: 'end_call',
       description: 'Hang up the call. Use when the user says bye / اقطع / بسلامة / safi / hang up. Say a very short goodbye first.',
       parameters: { type: 'OBJECT', properties: {} }
@@ -76,17 +122,30 @@ module.exports = function attachLive(server, deps) {
     if (!db.config.apiKey) { send({ type: 'error', message: 'no api key' }); return client.close(); }
 
     let tickers = {};
-    try { tickers = await getLiveTickerSnapshot(); } catch (e) { }
+    try { tickers = await getLiveTickerSnapshot(); } catch (e) {}
 
     const session = dbManager
       ? dbManager.getOrCreateAiSessionContext(email, 'live_call')
       : (() => {
-        if (!db.sessions[email]) db.sessions[email] = {};
-        if (!db.sessions[email].live_call) db.sessions[email].live_call = { title: 'Live Call', messages: [], activeChart: null, updatedAt: new Date().toISOString() };
-        return db.sessions[email].live_call;
-      })();
+          if (!db.sessions[email]) db.sessions[email] = {};
+          if (!db.sessions[email].live_call) db.sessions[email].live_call = { title: 'Live Call', messages: [], activeChart: null, updatedAt: new Date().toISOString() };
+          return db.sessions[email].live_call;
+        })();
     const recent = session.messages.slice(-8).map(m => `${m.role === 'user' ? name : 'You'}: ${m.content}`).join('\n');
     const learnedBlock = dbManager ? dbManager.buildTraderIntelligenceContext(email) : '';
+
+    // Extract recent community context for this user and the group
+    const userCommunityMsgs = (db.communityHub?.messages || [])
+      .filter(m => (m.userEmail && m.userEmail.toLowerCase() === email.toLowerCase()) || (m.senderName && m.senderName.toLowerCase() === name.toLowerCase()))
+      .slice(-6);
+    const userCommunityBlock = userCommunityMsgs.length > 0
+      ? '\n• Recent messages this user posted in the community chat:\n' + userCommunityMsgs.map(m => `  - [${m.timestamp}]: "${m.content}"`).join('\n')
+      : '';
+
+    const otherRecentMsgs = (db.communityHub?.messages || []).slice(-8);
+    const communityPulseBlock = otherRecentMsgs.length > 0
+      ? '\n• Live community pulse (what other traders are chatting about right now in the room):\n' + otherRecentMsgs.map(m => `  - ${m.senderName} (@${m.username || 'trader'}): "${m.content}"`).join('\n')
+      : '';
 
     const system = `You are SHARK — ${name}'s close friend, personal senior quant trader, and elite Wall Street Hedge Fund Partner on a LIVE PHONE CALL with him right now. You possess the world's most comprehensive institutional mastery across ALL trading schools and global macro geopolitics.
 
@@ -100,6 +159,13 @@ WHO YOU ARE & YOUR PLATFORM:
   3. Live Vision & Screen Analysis (الرؤية المباشرة للشاشة): When he taps the screen button (🖥️), you receive live frames of his screen, observe his charts and drawings, and discuss them.
   4. Macro & Geopolitical News (الأخبار اللحظية والماكرو): You track central banks (Fed rates), wars, elections, CPI inflation, and explain their direct impact on market liquidity.
   5. Executive Trade Signals (صفقات واضحة مع إدارة المخاطر): Precise Entry, Stop Loss (1.5x ATR), and Take Profit (1:3+ R:R) adapted to his balance ($${balance}).
+  6. Post to Community On His Behalf (النشر في المجتمع بصوته): When he says "اكتب رسالة فالمجتمع قول ليهم...", you call post_to_community and publish the message into the community feed under his actual name and avatar!
+  7. In-App Web Browser & Scraping (متصفح وقارئ مواقع لايف): When he asks to open or check any website/link (Investing, ForexFactory, Reuters, etc.), you open the in-app browser with open_in_app_browser and scrape/analyze it with browse_and_analyze_web!
+
+COMMUNITY OMNISCIENCE & TRADER PSYCHOLOGY:
+- You know ${name}'s mindset, their recent chats, and what they said in the community:${userCommunityBlock || ' (No previous community posts yet)'}
+- You know what other traders are discussing in the community room right now:${communityPulseBlock || ' (Community is active)'}
+- If ${name} asks what traders are saying or discussing, quote the actual topics and traders from the community pulse!
 
 WHO YOU ARE & INSTITUTIONAL MASTERY:
 - You are a Senior Wall Street Macro Quant Partner (like Ray Dalio meets ICT / SMC master trader).
@@ -137,6 +203,10 @@ TOOLS (use them, don't just talk about it):
 - show_chart: when he asks to see/open any chart — call it right away AND call get_market_data for the same asset, then tell him what the candles really show in 1-2 natural sentences.
 - get_market_data: before quoting any price, level or giving a trade idea, fetch the real data. Never invent numbers.
 - get_live_macro_news: fetch breaking news, political updates, and calendar events to explain market drivers.
+- post_to_community: when ${name} asks you to write, post, or publish something in the community chat on their behalf ("كتب رسالة فالمجتمع...", "نشر هاد التحليل فالمجتمع", "شارك صفقة مع الدراري"), call post_to_community immediately with the content and confirm to him warmly!
+- read_community_discussions: when ${name} asks what people/traders are saying or discussing ("شنو كيقولو الدراري", "واش كاين شي هضرة فالمجتمع"), call it to fetch the latest messages and summarize them!
+- open_in_app_browser: when ${name} asks to see or open any website or article ("فتح موقع كذا", "وريني Investing", "دخل لـ ForexFactory"), call it! The in-app browser window opens right on his screen!
+- browse_and_analyze_web: when ${name} asks you to read, scrape, or deeply analyze what is written on a webpage or link, call it to fetch live text and explain the key findings!
 - You may receive live frames of his screen when he shares it (screen-share button). Use them: read the price axis, candles, structure, his drawings, and combine with get_market_data.
 - end_call: when he wants to hang up, say a very short warm goodbye then call it.
 Trade ideas: give entry, stop and target clearly but briefly, with risk sized for his capital, and say it's his decision.`;
@@ -179,9 +249,9 @@ Trade ideas: give entry, stop and target clearly but briefly, with risk sized fo
               signalData: null,
               isVoice: true
             });
-          } catch (e) { }
+          } catch (e) {}
         } else {
-          try { saveDb(); } catch (e) { }
+          try { saveDb(); } catch (e) {}
         }
       }
       inBuf = ''; outBuf = '';
@@ -235,7 +305,7 @@ Trade ideas: give entry, stop and target clearly but briefly, with risk sized fo
                     }
                   }));
                 }
-              }).catch(() => { });
+              }).catch(() => {});
             } else if (fc.name === 'get_market_data' && cfg) {
               // فتح الشارت مباشرة على هاتف العميل ليطابق ما يراه مع ما يسمعه
               send({ type: 'chart', chart: { symbol: cfg.symbol, rawSymbol: cfg.raw, interval: iv } });
@@ -249,7 +319,7 @@ Trade ideas: give entry, stop and target clearly but briefly, with risk sized fo
                     }
                   }));
                 }
-              }).catch(() => { });
+              }).catch(() => {});
               result = an ? { asset: a, liveTradingViewSpotPrice: an.price, ...an } : { error: 'no data' };
             } else if (fc.name === 'get_live_macro_news') {
               const topic = String((fc.args && fc.args.topic) || 'gold geopolitics economy market').trim();
@@ -258,7 +328,7 @@ Trade ideas: give entry, stop and target clearly but briefly, with risk sized fo
                 if (typeof fetchLiveNews === 'function') {
                   newsList = await fetchLiveNews(topic);
                 }
-              } catch (e) { }
+              } catch (e) {}
               const headlines = (newsList || []).slice(0, 4).map(n => `• [${n.publisher}] ${n.title} (${n.time})`);
               const cal = (HIGH_IMPACT_CALENDAR || []).slice(0, 3).map(c => `• [${c.impact} IMPACT] ${c.event} (${c.currency} ${c.time}) - المتوقع: ${c.forecast}`);
               result = {
@@ -267,6 +337,118 @@ Trade ideas: give entry, stop and target clearly but briefly, with risk sized fo
                 breakingNews: headlines,
                 economicCalendar: cal,
                 macroSummary: `Real-time geopolitical & macro catalyst for ${topic}: Institutional market drivers active.`
+              };
+            } else if (fc.name === 'post_to_community') {
+              const content = String(fc.args?.content || '').trim();
+              const tag = String(fc.args?.tag || 'COMMUNITY').toUpperCase();
+              if (!content) {
+                result = { error: 'Content is required to post.' };
+              } else {
+                if (!db.communityHub) db.communityHub = {};
+                if (!Array.isArray(db.communityHub.messages)) db.communityHub.messages = [];
+                const userObj = (db.users || []).find(u => (u.email || '').toLowerCase() === email.toLowerCase());
+                const cleanSenderName = userObj?.name || name || 'Shark Trader';
+                const cleanUsername = userObj?.username || name.toLowerCase().replace(/[^a-z0-9_]/g, '') || 'trader';
+                const newMsg = {
+                  id: Date.now().toString(),
+                  senderName: cleanSenderName,
+                  username: cleanUsername,
+                  userEmail: email,
+                  avatarText: userObj?.avatar || '🦈',
+                  content,
+                  tag,
+                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  likes: 0,
+                  likedBy: [],
+                  reactions: { fire: [], target: [], rocket: [], blood: [] },
+                  isAiPostedOnBehalf: true
+                };
+                db.communityHub.messages.push(newMsg);
+                try { saveDb(); } catch (e) {}
+                if (dbManager && typeof dbManager.syncAllDataToSupabase === 'function') {
+                  dbManager.syncAllDataToSupabase().catch(() => {});
+                }
+                // Broadcast to user app immediately so community chat updates in real time
+                send({ type: 'community_post_created', post: newMsg });
+                result = {
+                  ok: true,
+                  posted: true,
+                  postedAs: cleanSenderName,
+                  content: newMsg.content,
+                  announcement: `تم نشر الرسالة في مجتمع الحيتان بنجاح باسمك (${cleanSenderName})!`
+                };
+              }
+            } else if (fc.name === 'read_community_discussions') {
+              const msgs = (db.communityHub?.messages || []).slice(-12);
+              const formatted = msgs.map(m => `• [${m.senderName} @${m.username}]: "${m.content}" (${m.timestamp})`);
+              result = {
+                ok: true,
+                count: msgs.length,
+                recentCommunityDiscussions: formatted,
+                summary: 'Discussions fetched. Tell the user what fellow traders are chatting about.'
+              };
+            } else if (fc.name === 'open_in_app_browser') {
+              let targetUrl = String(fc.args?.url || '').trim();
+              if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+                targetUrl = 'https://' + targetUrl;
+              }
+              const browserTitle = String(fc.args?.title || targetUrl.replace(/^https?:\/\//, '').split('/')[0]).trim();
+              const summary = String(fc.args?.summary || 'عرض الموقع بطلب منك').trim();
+              send({
+                type: 'open_browser',
+                url: targetUrl,
+                title: browserTitle,
+                summary
+              });
+              result = {
+                ok: true,
+                openedUrl: targetUrl,
+                title: browserTitle,
+                message: `In-app browser opened on user screen for ${browserTitle}`
+              };
+            } else if (fc.name === 'browse_and_analyze_web') {
+              let targetUrl = String(fc.args?.url || '').trim();
+              if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+                targetUrl = 'https://' + targetUrl;
+              }
+              let extracted = '';
+              try {
+                const fetchFn = typeof fetch !== 'undefined' ? fetch : require('node-fetch');
+                const ctl = new AbortController();
+                const to = setTimeout(() => ctl.abort(), 6000);
+                const r = await fetchFn(targetUrl, {
+                  signal: ctl.signal,
+                  headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+                  }
+                });
+                clearTimeout(to);
+                const html = await r.text();
+                extracted = html
+                  .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+                  .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+                  .replace(/<[^>]+>/g, ' ')
+                  .replace(/\s+/g, ' ')
+                  .trim()
+                  .substring(0, 3500);
+              } catch (webErr) {
+                extracted = `(Could not deeply scrape HTML directly: ${webErr.message}, but page is opened for user visual inspection)`;
+              }
+
+              // Also pop up the in-app browser so the user sees the page visually
+              send({
+                type: 'open_browser',
+                url: targetUrl,
+                title: targetUrl.replace(/^https?:\/\//, '').split('/')[0],
+                summary: 'تحليل مباشر لصفحة الويب'
+              });
+
+              result = {
+                ok: true,
+                url: targetUrl,
+                contentPreview: extracted,
+                directive: 'Summarize the most vital takeaways and market impacts for the user now in Darija.'
               };
             } else if (fc.name === 'end_call') {
               hangupPending = true;
@@ -279,7 +461,7 @@ Trade ideas: give entry, stop and target clearly but briefly, with risk sized fo
       }
     });
 
-    upstream.on('close', (code, reason) => { send({ type: 'closed', code, reason: reason.toString() }); flushTranscripts(); try { client.close(); } catch (e) { } });
+    upstream.on('close', (code, reason) => { send({ type: 'closed', code, reason: reason.toString() }); flushTranscripts(); try { client.close(); } catch (e) {} });
     upstream.on('error', (e) => { console.warn('live upstream error:', e.message); send({ type: 'error', message: e.message }); });
 
     client.on('message', (raw) => {
@@ -291,18 +473,14 @@ Trade ideas: give entry, stop and target clearly but briefly, with risk sized fo
       } else if (m.type === 'video' && m.data) {
         upstream.send(JSON.stringify({ realtimeInput: { video: { data: m.data, mimeType: 'image/jpeg' } } }));
       } else if (m.type === 'screen_state') {
-        upstream.send(JSON.stringify({
-          realtimeInput: {
-            text: m.on
-              ? '(System: the user just started sharing his screen. You now receive live frames of it. Look at it: the app, the chart, candles, price axis, levels, his drawings. When he asks what you see, describe and analyse what is really visible.)'
-              : '(System: the user stopped sharing the screen.)'
-          }
-        }));
+        upstream.send(JSON.stringify({ realtimeInput: { text: m.on
+          ? '(System: the user just started sharing his screen. You now receive live frames of it. Look at it: the app, the chart, candles, price axis, levels, his drawings. When he asks what you see, describe and analyse what is really visible.)'
+          : '(System: the user stopped sharing the screen.)' } }));
       } else if (m.type === 'text' && m.text) {
         upstream.send(JSON.stringify({ realtimeInput: { text: m.text } }));
       }
     });
 
-    client.on('close', () => { flushTranscripts(); try { upstream.close(); } catch (e) { } });
+    client.on('close', () => { flushTranscripts(); try { upstream.close(); } catch (e) {} });
   });
 };
