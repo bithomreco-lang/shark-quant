@@ -1540,8 +1540,8 @@ app.get('/api/admin/status', (req, res) => {
     model: db.config.model || 'gemini-3-flash-preview',
     supabaseConnected: dbManager.isSupabaseConnected(),
     supabaseSyncReport: dbManager.getSupabaseSyncReport(),
-    supabaseUrl: db.config.supabaseUrl || '',
-    hasSupabaseKey: Boolean(db.config.supabaseKey && db.config.supabaseKey.length > 10),
+    supabaseUrl: db.config.supabaseUrl || process.env.SUPABASE_URL || '',
+    hasSupabaseKey: Boolean((db.config.supabaseKey && db.config.supabaseKey.length > 10) || process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY),
     users: db.users,
     aiLearningMemory: db.aiLearningMemory,
     communityPulse: db.communityHub?.marketPulse || null
@@ -2045,8 +2045,8 @@ app.post('/api/community/messages/:id/signal-status', (req, res) => {
 
 // ── USER AUTH, PROFILE & PERSISTENCE MANAGEMENT (SUPABASE AUTH + GOOGLE OAUTH + STRICT @GMAIL.COM) ──
 app.get('/api/auth/supabase-config', async (req, res) => {
-  const supabaseUrl = (db.config.supabaseUrl || '').trim();
-  const supabaseKey = (db.config.supabaseKey || '').trim();
+  const supabaseUrl = (process.env.SUPABASE_URL || db.config.supabaseUrl || '').trim();
+  const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || db.config.supabaseKey || '').trim();
   const redirectTo = req.query.redirectTo || 'http://localhost:8081';
   let googleOAuthEnabledInSupabase = false;
   if (supabaseUrl && supabaseKey) {

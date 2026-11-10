@@ -114,8 +114,8 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
   };
 
   function initSupabaseClient() {
-    const url = (db.config.supabaseUrl || process.env.SUPABASE_URL || '').trim();
-    const key = (db.config.supabaseKey || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || '').trim();
+    const url = (process.env.SUPABASE_URL || db.config.supabaseUrl || '').trim();
+    const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || db.config.supabaseKey || '').trim();
     if (url && key && url.startsWith('http')) {
       try {
         supabase = createClient(url, key, {
