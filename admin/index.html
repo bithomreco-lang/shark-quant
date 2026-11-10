@@ -750,7 +750,7 @@
             </div>
           </td>
           <td>
-            <select class="plan-select" onchange="changeUserPlan('${u.id}', this.value)" style="border-color:${u.plan === 'VIP' ? '#FFE600' : (u.plan === 'PREMIUM' ? '#00E5FF' : '#5E6E82')}; color:${u.plan === 'VIP' ? '#FFE600' : (u.plan === 'PREMIUM' ? '#00E5FF' : '#FFF')}; font-weight:900;">
+            <select class="plan-select" onchange="changeUserPlan('${u.id}', this.value, '${u.email}')" style="border-color:${u.plan === 'VIP' ? '#FFE600' : (u.plan === 'PREMIUM' ? '#00E5FF' : '#5E6E82')}; color:${u.plan === 'VIP' ? '#FFE600' : (u.plan === 'PREMIUM' ? '#00E5FF' : '#FFF')}; font-weight:900;">
               <option value="FREE" ${u.plan === 'FREE' ? 'selected' : ''}>FREE</option>
               <option value="PREMIUM" ${u.plan === 'PREMIUM' ? 'selected' : ''}>PREMIUM ⭐</option>
               <option value="VIP" ${u.plan === 'VIP' ? 'selected' : ''}>VIP 👑</option>
@@ -758,7 +758,7 @@
             </select>
           </td>
           <td>
-            <select class="plan-select" onchange="changeUserRole('${u.id}', this.value)" style="border-color:${u.role === 'ADMIN' ? '#FF0055' : '#2E3A52'}; color:${u.role === 'ADMIN' ? '#FF4D88' : '#8A9BB4'}; font-weight:800;">
+            <select class="plan-select" onchange="changeUserRole('${u.id}', this.value, '${u.email}')" style="border-color:${u.role === 'ADMIN' ? '#FF0055' : '#2E3A52'}; color:${u.role === 'ADMIN' ? '#FF4D88' : '#8A9BB4'}; font-weight:800;">
               <option value="USER" ${u.role === 'USER' ? 'selected' : ''}>👤 USER</option>
               <option value="ADMIN" ${u.role === 'ADMIN' ? 'selected' : ''}>👑 ADMIN</option>
             </select>
@@ -779,10 +779,10 @@
           <td><span class="badge-status ${u.status === 'Active' ? 'status-active' : 'status-suspended'}">${u.status === 'Active' ? 'نشط 🟢' : 'محظور 🔴'}</span></td>
           <td>
             <div style="display:flex; gap:6px;">
-              <button class="btn-toggle" style="border-color:${u.status === 'Active' ? '#FF0055' : '#00FF66'}; color:${u.status === 'Active' ? '#FF4D88' : '#00FF66'};" onclick="toggleUser('${u.id}')">
+              <button class="btn-toggle" style="border-color:${u.status === 'Active' ? '#FF0055' : '#00FF66'}; color:${u.status === 'Active' ? '#FF4D88' : '#00FF66'};" onclick="toggleUser('${u.id}', '${u.email}')">
                 ${u.status === 'Active' ? '🚫 بلوك' : '✅ فك الحظر'}
               </button>
-              ${u.role !== 'ADMIN' ? `<button class="btn-toggle" style="border-color:#FF3355; color:#FF3355;" onclick="deleteUser('${u.id}')" title="حذف الحساب">🗑️</button>` : ''}
+              ${u.role !== 'ADMIN' ? `<button class="btn-toggle" style="border-color:#FF3355; color:#FF3355;" onclick="deleteUser('${u.id}', '${u.email}')" title="حذف الحساب">🗑️</button>` : ''}
             </div>
           </td>
         `;
@@ -918,44 +918,57 @@ GRANT ALL ON TABLE public.users, public.ai_learning_memory, public.user_conversa
       }
     }
 
-    async function toggleUser(userId) {
+    async function toggleUser(userId, email = '') {
       await fetch('/api/admin/toggle-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId })
+        body: JSON.stringify({ userId, email })
       });
       showToast('⚡ تم تحديث حالة المشترك ومزامنة التطبيق فوراً!');
       fetchStatus(true);
     }
 
-    async function changeUserPlan(userId, plan) {
+    async function changeUserPlan(userId, plan, email = '') {
+      if (cachedUsers) {
+        const row = cachedUsers.find(u => (userId && u.id === userId) || (email && u.email === email));
+        if (row) row.plan = plan;
+      }
       await fetch('/api/admin/change-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, plan })
+        body: JSON.stringify({ userId, email, plan })
       });
-      showToast('⚡ تم تحديث الباقة إلى ' + plan + ' على شاشة المشترك وفي Supabase فوراً!');
-      fetchStatus(true);
+      showToast('⚡ تم تحديث الباقة إلى ' + plan + ' وحفظها فورياً في Supabase!');
+      setTimeout(() => fetchStatus(true), 400);
     }
 
-    async function changeUserRole(userId, role) {
+    async function changeUserRole(userId, role, email = '') {
+      if (cachedUsers) {
+        const row = cachedUsers.find(u => (userId && u.id === userId) || (email && u.email === email));
+        if (row) row.role = role;
+      }
       await fetch('/api/admin/change-role', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, role })
+        body: JSON.stringify({ userId, email, role })
       });
       showToast(role === 'ADMIN' ? '👑 تم منح صلاحيات الآدمن (ADMIN) لهذا الحساب فوراً!' : '👤 تم إرجاع الحساب إلى صلاحيات عضو عادي (USER) فوراً!');
-      fetchStatus(true);
+      setTimeout(() => fetchStatus(true), 400);
     }
 
-    async function deleteUser(userId) {
+    async function deleteUser(userId, email = '') {
+      if (!confirm('هل أنت متأكد من حذف هذا الحساب نهائياً من النظام وSupabase؟')) return;
+      if (cachedUsers) {
+        cachedUsers = cachedUsers.filter(u => !((userId && u.id === userId) || (email && u.email === email)));
+        renderUsersTable();
+      }
       await fetch('/api/admin/delete-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId })
+        body: JSON.stringify({ userId, email })
       });
       showToast('🗑️ تم حذف الحساب من السيرفر ومن Supabase بنجاح');
-      fetchStatus(true);
+      setTimeout(() => fetchStatus(true), 400);
     }
 
     function showToast(msg) {

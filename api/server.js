@@ -1627,25 +1627,30 @@ app.post('/api/admin/sync-supabase', async (req, res) => {
 
 app.post('/api/admin/toggle-user', async (req, res) => {
   const { userId, email } = req.body;
-  const user = db.users.find(u => (userId && u.id === userId) || (email && u.email.toLowerCase() === String(email).toLowerCase()));
-  if (user) {
-    user.status = user.status === 'Active' ? 'Suspended' : 'Active';
+  const targetEmail = String(email || (userId && String(userId).includes('@') ? userId : '') || (user ? user.email : '')).trim().toLowerCase();
+  if (user || targetEmail) {
+    const currentStatus = user ? user.status : 'Active';
+    const newStatus = currentStatus === 'Active' ? 'Suspended' : 'Active';
+    if (user) user.status = newStatus;
     if (!db.communityHub.blockedUsers) db.communityHub.blockedUsers = [];
-    if (user.status === 'Suspended') {
-      if (!db.communityHub.blockedUsers.includes(user.name)) {
-        db.communityHub.blockedUsers.push(user.name);
+    if (newStatus === 'Suspended') {
+      const uName = user ? user.name : targetEmail.split('@')[0];
+      if (!db.communityHub.blockedUsers.includes(uName)) {
+        db.communityHub.blockedUsers.push(uName);
       }
-      if (user.username && !db.communityHub.blockedUsers.includes('@' + user.username)) {
+      if (user?.username && !db.communityHub.blockedUsers.includes('@' + user.username)) {
         db.communityHub.blockedUsers.push('@' + user.username);
       }
-    } else {
+    } else if (user) {
       db.communityHub.blockedUsers = db.communityHub.blockedUsers.filter(
         b => b !== user.name && b !== ('@' + user.username)
       );
     }
     saveDb();
-    await dbManager.updateUserStatusInSupabase(user.email, user.status);
-    res.json({ success: true, newStatus: user.status, user });
+    if (targetEmail) {
+      await dbManager.updateUserStatusInSupabase(targetEmail, newStatus);
+    }
+    res.json({ success: true, newStatus: newStatus, user: user || { email: targetEmail, status: newStatus } });
   } else {
     res.status(404).json({ error: 'User not found' });
   }
@@ -1656,10 +1661,20 @@ app.post('/api/admin/change-plan', async (req, res) => {
   const user = db.users.find(
     u => (userId && u.id === userId) || (email && u.email.toLowerCase() === String(email).toLowerCase())
   );
-  const targetEmail = (email || (user ? user.email : '')).toLowerCase();
+  const targetEmail = String(email || (userId && String(userId).includes('@') ? userId : '') || (user ? user.email : '')).trim().toLowerCase();
 
   if (user && plan) {
     user.plan = plan;
+  } else if (targetEmail && plan) {
+    db.users.push({
+      id: userId || ('usr_' + Date.now()),
+      email: targetEmail,
+      username: targetEmail.split('@')[0],
+      name: targetEmail.split('@')[0],
+      plan: plan,
+      role: 'USER',
+      status: 'Active'
+    });
   }
   saveDb();
 
@@ -1676,24 +1691,25 @@ app.post('/api/admin/change-role', async (req, res) => {
   const user = db.users.find(
     u => (userId && u.id === userId) || (email && u.email.toLowerCase() === String(email).toLowerCase())
   );
-  const targetEmail = (email || (user ? user.email : '')).toLowerCase();
+  const targetEmail = String(email || (userId && String(userId).includes('@') ? userId : '') || (user ? user.email : '')).trim().toLowerCase();
+  const nextRole = String(role).toUpperCase() === 'ADMIN' ? 'ADMIN' : 'USER';
 
-  if (user && role) {
-    user.role = String(role).toUpperCase() === 'ADMIN' ? 'ADMIN' : 'USER';
+  if (user) {
+    user.role = nextRole;
   }
   saveDb();
 
-  if (targetEmail && role) {
-    await dbManager.updateUserRoleInSupabase(targetEmail, user ? user.role : role);
+  if (targetEmail) {
+    await dbManager.updateUserRoleInSupabase(targetEmail, nextRole);
   }
 
-  res.json({ success: true, user: user || { email: targetEmail, role } });
+  res.json({ success: true, user: user || { email: targetEmail, role: nextRole } });
 });
 
 app.post('/api/admin/delete-user', async (req, res) => {
   const { userId, email } = req.body;
   const user = db.users.find(u => (userId && u.id === userId) || (email && u.email.toLowerCase() === String(email).toLowerCase()));
-  const targetEmail = (email || (user ? user.email : '')).toLowerCase();
+  const targetEmail = String(email || (userId && String(userId).includes('@') ? userId : '') || (user ? user.email : '')).trim().toLowerCase();
   
   if (user) {
     db.users = db.users.filter(u => u !== user);
@@ -1815,16 +1831,34 @@ app.post('/api/community/posts/:id/like', (req, res) => {
 // ══════════════════════════════════════════════
 const activeFloorTypers = new Map();
 
-app.get('/api/community/messages', (req, res) => {
+app.get('/api/community/messages', async (req, res) => {
   const now = Date.now();
   for (const [k, v] of activeFloorTypers.entries()) {
     if (now - v.updatedAt > 60000) {
       activeFloorTypers.delete(k);
     }
   }
+
+  // 1. Fetch live messages directly from Supabase Cloud PostgreSQL
+  let supaMsgs = null;
+  if (dbManager && typeof dbManager.fetchCommunityMessagesFromSupabase === 'function') {
+    try {
+      supaMsgs = await dbManager.fetchCommunityMessagesFromSupabase(100);
+    } catch (e) {}
+  }
+
+  let finalMessages = [];
+  if (supaMsgs && Array.isArray(supaMsgs) && supaMsgs.length > 0) {
+    finalMessages = supaMsgs;
+    db.communityMessages = supaMsgs;
+    if (db.communityHub) db.communityHub.messages = supaMsgs;
+  } else {
+    finalMessages = db.communityMessages || db.communityHub?.messages || [];
+  }
+
   res.json({
-    messages: db.communityMessages || [],
-    blockedUsers: db.blockedUsers || [],
+    messages: finalMessages,
+    blockedUsers: db.blockedUsers || (db.communityHub ? db.communityHub.blockedUsers : []) || [],
     typingUsers: Array.from(activeFloorTypers.values())
   });
 });
@@ -1954,20 +1988,34 @@ app.post('/api/community/messages', (req, res) => {
 
   if (!db.communityHub.messages) db.communityHub.messages = [];
   db.communityHub.messages.push(newMessage);
+  db.communityMessages = db.communityHub.messages;
+  saveDb();
+
+  // Permanently save to Supabase Cloud so all users & serverless instances see it immediately!
+  if (dbManager && typeof dbManager.syncCommunityMessageToSupabase === 'function') {
+    try {
+      await dbManager.syncCommunityMessageToSupabase(newMessage);
+    } catch (e) {}
+  }
   dbManager.learnFromCommunityMessage(newMessage, req.body.senderEmail || null);
 
   res.json({ success: true, message: newMessage });
 });
 
 // Admin Moderation: Delete Message
-app.delete('/api/community/messages/:id', (req, res) => {
+app.delete('/api/community/messages/:id', async (req, res) => {
   const { id } = req.params;
   if (db.communityHub.messages) {
     db.communityHub.messages = db.communityHub.messages.filter(m => m.id !== id);
+    db.communityMessages = db.communityHub.messages;
     saveDb();
-    return res.json({ success: true, id });
   }
-  res.json({ success: false });
+  if (dbManager && typeof dbManager.deleteCommunityMessageFromSupabase === 'function') {
+    try {
+      await dbManager.deleteCommunityMessageFromSupabase(id);
+    } catch (e) {}
+  }
+  res.json({ success: true, id });
 });
 
 // Admin Moderation: Pin/Unpin Message
@@ -2366,10 +2414,21 @@ app.post('/api/auth/google-login', async (req, res) => {
 });
 
 // Real-time 1-second sync endpoint so App.js immediately reflects Admin plan changes, blocks, or account deletion
-app.get('/api/users/me', (req, res) => {
+app.get('/api/users/me', async (req, res) => {
   const emailLower = String(req.query.email || '').trim().toLowerCase();
   if (!emailLower) return res.json({ success: false, notFound: true });
-  const user = db.users.find(u => u.email.toLowerCase() === emailLower);
+  let user = db.users.find(u => u.email.toLowerCase() === emailLower);
+
+  if (!user && dbManager && typeof dbManager.fetchUsersFromSupabase === 'function') {
+    try {
+      const supaUsers = await dbManager.fetchUsersFromSupabase();
+      if (supaUsers && Array.isArray(supaUsers)) {
+        db.users = supaUsers;
+        user = db.users.find(u => u.email.toLowerCase() === emailLower);
+      }
+    } catch (e) {}
+  }
+
   if (!user) return res.json({ success: false, notFound: true });
   const isBlocked = (db.communityHub?.blockedUsers || []).includes(user.name) ||
     (user.username && (db.communityHub?.blockedUsers || []).includes('@' + user.username)) ||

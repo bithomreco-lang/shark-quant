@@ -665,6 +665,7 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
   }
 
   async function syncCommunityMessageToSupabase(msg) {
+    if (!supabase) initSupabaseClient();
     if (!supabase || !msg) return;
     try {
       await supabase.from('community_messages').upsert({
@@ -689,6 +690,62 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
       }, { onConflict: 'id' });
     } catch (e) {
       console.warn('Supabase community msg sync warn:', e.message);
+    }
+  }
+
+  async function fetchCommunityMessagesFromSupabase(limit = 100) {
+    if (!supabase) initSupabaseClient();
+    if (!supabase) return null;
+    try {
+      const { data, error } = await supabase
+        .from('community_messages')
+        .select('*')
+        .order('created_at', { ascending: true })
+        .limit(limit);
+      if (error) {
+        console.warn('Supabase fetch community messages warn:', error.message);
+        return null;
+      }
+      if (data && Array.isArray(data)) {
+        return data.map(m => ({
+          id: m.id,
+          senderEmail: m.sender_email,
+          senderUsername: m.sender_email ? m.sender_email.split('@')[0] : 'trader',
+          senderName: m.sender_name || 'Trader',
+          role: m.role || 'VIP TRADER',
+          isAdmin: Boolean(m.is_admin),
+          badge: m.badge || 'VIP',
+          tag: m.tag || '#DISCUSSION',
+          theme: m.theme || 'platinum',
+          type: m.type || 'CHAT',
+          category: m.category || 'NORMAL',
+          content: m.content || '',
+          signalData: m.signal_data || null,
+          audioData: m.audio_data || null,
+          audioDuration: m.audio_duration || null,
+          avatarText: m.avatar_text || 'TR',
+          time: m.time_label || '00:00',
+          likes: Number(m.likes) || 0,
+          likedBy: [],
+          reactions: { fire: [], target: [], rocket: [], blood: [] },
+          isPinned: Boolean(m.is_pinned),
+          createdAt: m.created_at
+        }));
+      }
+    } catch (e) {
+      console.warn('Supabase fetch community messages exception:', e.message);
+    }
+    return null;
+  }
+
+  async function deleteCommunityMessageFromSupabase(id) {
+    if (!supabase) initSupabaseClient();
+    if (!supabase || !id) return false;
+    try {
+      const { error } = await supabase.from('community_messages').delete().eq('id', id);
+      return !error;
+    } catch (e) {
+      return false;
     }
   }
 
@@ -1339,7 +1396,10 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
     updateUserPlanInSupabase,
     updateUserRoleInSupabase,
     updateUserStatusInSupabase,
-    deleteUserFromSupabase
+    deleteUserFromSupabase,
+    syncCommunityMessageToSupabase,
+    fetchCommunityMessagesFromSupabase,
+    deleteCommunityMessageFromSupabase
   };
 }
 
