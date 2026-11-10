@@ -485,6 +485,7 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
 
   // ── Direct Supabase Cloud Queries (Rock-solid PostgreSQL persistence) ──
   async function fetchUsersFromSupabase() {
+    if (!supabase) initSupabaseClient();
     if (!supabase) return null;
     try {
       const { data, error } = await supabase.from('users').select('*').order('joined_at', { ascending: false });
@@ -518,6 +519,7 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
   }
 
   async function updateUserPlanInSupabase(email, plan) {
+    if (!supabase) initSupabaseClient();
     if (!supabase || !email) return false;
     try {
       const emailLower = email.trim().toLowerCase();
@@ -539,6 +541,7 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
   }
 
   async function updateUserRoleInSupabase(email, role) {
+    if (!supabase) initSupabaseClient();
     if (!supabase || !email) return false;
     try {
       const emailLower = email.trim().toLowerCase();
@@ -550,6 +553,7 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
   }
 
   async function updateUserStatusInSupabase(email, status) {
+    if (!supabase) initSupabaseClient();
     if (!supabase || !email) return false;
     try {
       const emailLower = email.trim().toLowerCase();
@@ -561,6 +565,7 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
   }
 
   async function deleteUserFromSupabase(email) {
+    if (!supabase) initSupabaseClient();
     if (!supabase || !email) return false;
     try {
       const emailLower = email.trim().toLowerCase();
@@ -1270,7 +1275,10 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
     loadDb,
     saveDb,
     initSupabaseClient,
-    isSupabaseConnected: () => Boolean(supabase),
+    isSupabaseConnected: () => {
+      if (!supabase) initSupabaseClient();
+      return Boolean(supabase);
+    },
     getSupabaseSyncReport: () => lastSupabaseSyncReport,
     syncAllDataToSupabase,
     deleteUserById,
