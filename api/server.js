@@ -33,6 +33,7 @@ app.get(['/admin', '/admin/', '/admin/index.html'], (req, res) => {
 
 // 🌐 Unified Production Static Serving (Landing Site, App, Admin, Downloads & _expo)
 const possibleRoots = [
+  path.resolve(__dirname, '..', 'shark_quant_repo'),
   path.resolve(__dirname, '..', 'shark_landing_site'),
   path.resolve(__dirname, '..'),
   path.resolve(__dirname)
