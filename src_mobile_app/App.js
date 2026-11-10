@@ -1579,9 +1579,15 @@ export default function App() {
     };
   };
 
-  const handleCallSocketMessage = (ev) => {
+  const handleCallSocketMessage = async (ev) => {
+    let rawText = ev.data;
+    if (typeof Blob !== 'undefined' && rawText instanceof Blob) {
+      try {
+        rawText = await rawText.text();
+      } catch (e) { return; }
+    }
     let m;
-    try { m = JSON.parse(ev.data); } catch (e) { return; }
+    try { m = JSON.parse(rawText); } catch (e) { return; }
 
     // 1. Setup complete from Google Gemini Live Edge (Sub-300ms direct connection)
     if (m.setupComplete) {
@@ -1837,8 +1843,10 @@ export default function App() {
         for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
         const b64 = window.btoa(bin);
 
-        // Stream audio directly into Gemini Live!
+        // Stream audio to both local relay and direct Gemini Live
         ws.send(JSON.stringify({
+          type: 'audio',
+          data: b64,
           realtimeInput: {
             mediaChunks: [{ mimeType: 'audio/pcm;rate=16000', data: b64 }]
           }
@@ -2060,7 +2068,7 @@ export default function App() {
       setCallStatusMessage('⚠️ عطي الإذن للميكروفون من المتصفح');
     }
 
-    // Direct Ultra-Fast Gemini Live WebSocket (Sub-300ms Native Voice & Vision)
+    // Direct Ultra-Fast Live Call (Local Development Relay or Direct Google Gemini Live)
     let wsSetupDone = false;
     try {
       const q = new URLSearchParams({
@@ -2070,51 +2078,73 @@ export default function App() {
         balance: String(globalBalance || 50000),
       });
 
-      setCallStatusMessage('⚡ جاري جلب مفتاح البث الحي الفائق...');
-      const cfgRes = await fetch(`${BACKEND_URL}/api/live-config?${q.toString()}`);
-      const cfg = await cfgRes.json();
+      const isLocal = BACKEND_URL.includes('localhost') || BACKEND_URL.includes('127.0.0.1') || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'));
+      
+      let ws = null;
+      if (isLocal) {
+        setCallStatusMessage('⚡ متصل بالسيرفر المحلي (وضع التطوير السريع)...');
+        const localWsUrl = `${BACKEND_URL.replace(/^http/, 'ws')}/live?${q.toString()}`;
+        ws = new WebSocket(localWsUrl);
+        callWsRef.current = ws;
 
-      if (!cfg || !cfg.success || !cfg.apiKey) {
-        throw new Error('Could not fetch Gemini Live config');
+        ws.onopen = () => {
+          wsSetupDone = true;
+          setCallStatusMessage('🦈 متصل بالمباشر (خادم التطوير المحلي) — تكلم دابا');
+          openCallMic(ws);
+        };
+        ws.onmessage = handleCallSocketMessage;
+        ws.onerror = (err) => {
+          console.warn('Local WS error:', err);
+        };
       }
 
-      const googleLiveWsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${cfg.apiKey}`;
-      const ws = new WebSocket(googleLiveWsUrl);
-      callWsRef.current = ws;
+      if (!ws) {
+        setCallStatusMessage('⚡ جاري جلب مفتاح البث الحي الفائق...');
+        const cfgRes = await fetch(`${BACKEND_URL}/api/live-config?${q.toString()}`);
+        const cfg = await cfgRes.json();
 
-      ws.onopen = () => {
-        setCallStatusMessage('⚡ متصل بالسحاب.. جاري ضبط محرك Charon Live...');
-        ws.send(JSON.stringify({
-          setup: {
-            model: cfg.model || 'models/gemini-2.5-flash-native-audio-preview-12-2025',
-            generationConfig: {
-              responseModalities: ['AUDIO'],
-              speechConfig: {
-                voiceConfig: {
-                  prebuiltVoiceConfig: {
-                    voiceName: cfg.voiceName || 'Charon'
+        if (!cfg || !cfg.success || !cfg.apiKey) {
+          throw new Error('Could not fetch Gemini Live config');
+        }
+
+        const googleLiveWsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${cfg.apiKey}`;
+        ws = new WebSocket(googleLiveWsUrl);
+        callWsRef.current = ws;
+
+        ws.onopen = () => {
+          setCallStatusMessage('⚡ متصل بالسحاب.. جاري ضبط محرك Charon Live...');
+          ws.send(JSON.stringify({
+            setup: {
+              model: cfg.model || 'models/gemini-2.5-flash-native-audio-preview-12-2025',
+              generationConfig: {
+                responseModalities: ['AUDIO'],
+                speechConfig: {
+                  voiceConfig: {
+                    prebuiltVoiceConfig: {
+                      voiceName: cfg.voiceName || 'Charon'
+                    }
                   }
                 }
-              }
-            },
-            systemInstruction: {
-              parts: [{ text: cfg.systemInstruction }]
-            },
-            tools: cfg.tools || [],
-            inputAudioTranscription: {},
-            outputAudioTranscription: {}
-          }
-        }));
-      };
+              },
+              systemInstruction: {
+                parts: [{ text: cfg.systemInstruction }]
+              },
+              tools: cfg.tools || [],
+              inputAudioTranscription: {},
+              outputAudioTranscription: {}
+            }
+          }));
+        };
 
-      ws.onmessage = (ev) => {
-        wsSetupDone = true;
-        handleCallSocketMessage(ev);
-        openCallMic(ws);
-      };
+        ws.onmessage = (ev) => {
+          wsSetupDone = true;
+          handleCallSocketMessage(ev);
+          openCallMic(ws);
+        };
+      }
 
       ws.onerror = (err) => {
-        console.warn('Gemini Live WS error, using serverless fallback:', err);
+        console.warn('Live WS error, using serverless fallback:', err);
         if (!wsSetupDone && liveCallActiveRef.current) {
           startServerlessVoiceTurn();
           triggerLiveVoiceTurn('سلام خويا الحوت');

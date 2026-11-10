@@ -32,13 +32,20 @@ app.get(['/admin', '/admin/', '/admin/index.html'], (req, res) => {
 });
 
 // 🌐 Unified Production Static Serving (Landing Site, App, Admin, Downloads & _expo)
-const LANDING_DIR = path.resolve(__dirname, '..', 'shark_landing_site');
-if (fs.existsSync(LANDING_DIR)) {
-  app.use(express.static(LANDING_DIR));
-  app.use('/app', express.static(path.join(LANDING_DIR, 'app')));
-  app.use('/admin', express.static(path.join(LANDING_DIR, 'admin')));
-  app.use('/downloads', express.static(path.join(LANDING_DIR, 'downloads')));
-  app.use('/_expo', express.static(path.join(LANDING_DIR, '_expo')));
+const possibleRoots = [
+  path.resolve(__dirname, '..', 'shark_landing_site'),
+  path.resolve(__dirname, '..'),
+  path.resolve(__dirname)
+];
+for (const r of possibleRoots) {
+  if (fs.existsSync(path.join(r, 'app'))) {
+    app.use(express.static(r));
+    app.use('/app', express.static(path.join(r, 'app')));
+    app.use('/admin', express.static(path.join(r, 'admin')));
+    app.use('/downloads', express.static(path.join(r, 'downloads')));
+    app.use('/_expo', express.static(path.join(r, '_expo')));
+    break;
+  }
 }
 
 const DB_FILE = path.join(__dirname, 'database.json');

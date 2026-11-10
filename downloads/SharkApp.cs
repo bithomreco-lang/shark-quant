@@ -97,7 +97,21 @@ namespace SharkTradersAI
                     catch { }
                 };
 
-                webView.Source = new Uri("https://shark-quant-backend-auw2-blue.vercel.app/app");
+                string targetUrl = "https://shark-quant-backend-auw2-blue.vercel.app/app";
+                try
+                {
+                    using (var client = new System.Net.WebClient())
+                    {
+                        string ping = client.DownloadString("http://localhost:5000/api/admin/status");
+                        if (!string.IsNullOrEmpty(ping))
+                        {
+                            targetUrl = "http://localhost:5000/app";
+                        }
+                    }
+                }
+                catch { }
+
+                webView.Source = new Uri(targetUrl);
             }
             catch (Exception ex)
             {
