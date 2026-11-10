@@ -1882,7 +1882,7 @@ app.post('/api/community/typing', (req, res) => {
   return res.json({ success: true });
 });
 
-app.post('/api/community/messages', (req, res) => {
+app.post('/api/community/messages', async (req, res) => {
   const {
     senderName = 'Trader',
     role = 'VIP TRADER',
