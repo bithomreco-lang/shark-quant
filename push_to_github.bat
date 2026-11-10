@@ -8,7 +8,7 @@ echo.
 git status
 echo.
 echo Pushing branch 'main' to https://github.com/bithomreco-lang/shark-quant.git ...
-git push -u origin main
+git push -f origin main
 echo.
 if %ERRORLEVEL% EQU 0 (
     echo [SUCCESS] Your repository is now fully uploaded to GitHub!
