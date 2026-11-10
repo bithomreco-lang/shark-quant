@@ -12,7 +12,7 @@ namespace SharkQuantLauncher
         {
             try
             {
-                string targetUrl = "http://localhost:3000/app";
+                string targetUrl = "https://shark-quant-backend-auw2-blue.vercel.app/app";
                 string appName = "Shark Traders AI";
                 string profileDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SharkQuantProfile");
 

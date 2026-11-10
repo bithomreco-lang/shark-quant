@@ -9,7 +9,7 @@ echo "=============================================================="
 echo ""
 echo "Launching standalone window..."
 
-TARGET_URL="http://localhost:3000/app"
+TARGET_URL="https://shark-quant-backend-auw2-blue.vercel.app/app"
 
 # Try opening in Chrome App Mode
 if [ -d "/Applications/Google Chrome.app" ]; then

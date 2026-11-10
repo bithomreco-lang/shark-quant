@@ -16,7 +16,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$desktop = [Environment]::GetFolderPath('Desktop'); " ^
   "$startMenu = [Environment]::GetFolderPath('StartMenu') + '\Programs'; " ^
   "$target = 'msedge.exe'; " ^
-  "$args = '--app=http://localhost:3000/app --window-size=430,890'; " ^
+  "$args = '--app=https://shark-quant-backend-auw2-blue.vercel.app/app --window-size=430,890'; " ^
   "$s1 = $ws.CreateShortcut($desktop + '\Shark Traders AI.lnk'); " ^
   "$s1.TargetPath = $target; " ^
   "$s1.Arguments = $args; " ^

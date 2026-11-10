@@ -10,7 +10,7 @@ echo Launching standalone trading engine in dedicated native window...
 echo.
 
 :: Detect target host (localhost vs live production)
-set TARGET_URL=http://localhost:3000/app
+set TARGET_URL=https://shark-quant-backend-auw2-blue.vercel.app/app
 
 :: Check if Microsoft Edge is available (installed on all Windows 10/11)
 where msedge >nul 2>&1
