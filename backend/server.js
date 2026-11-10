@@ -32,13 +32,21 @@ app.get(['/admin', '/admin/', '/admin/index.html'], (req, res) => {
 });
 
 // 🌐 Unified Production Static Serving (Landing Site, App, Admin, Downloads & _expo)
-const LANDING_DIR = path.resolve(__dirname, '..', 'shark_landing_site');
-if (fs.existsSync(LANDING_DIR)) {
-  app.use(express.static(LANDING_DIR));
-  app.use('/app', express.static(path.join(LANDING_DIR, 'app')));
-  app.use('/admin', express.static(path.join(LANDING_DIR, 'admin')));
-  app.use('/downloads', express.static(path.join(LANDING_DIR, 'downloads')));
-  app.use('/_expo', express.static(path.join(LANDING_DIR, '_expo')));
+const possibleRoots = [
+  path.resolve(__dirname, '..', 'shark_quant_repo'),
+  path.resolve(__dirname, '..', 'shark_landing_site'),
+  path.resolve(__dirname, '..'),
+  path.resolve(__dirname)
+];
+for (const r of possibleRoots) {
+  if (fs.existsSync(path.join(r, 'app'))) {
+    app.use(express.static(r));
+    app.use('/app', express.static(path.join(r, 'app')));
+    app.use('/admin', express.static(path.join(r, 'admin')));
+    app.use('/downloads', express.static(path.join(r, 'downloads')));
+    app.use('/_expo', express.static(path.join(r, '_expo')));
+    break;
+  }
 }
 
 const DB_FILE = path.join(__dirname, 'database.json');
@@ -2617,19 +2625,21 @@ app.get('/api/users/me', async (req, res) => {
   const emailLower = String(req.query.email || '').trim().toLowerCase();
   if (!emailLower) return res.json({ success: false, notFound: true });
 
-  let user = null;
-  // Always query Supabase first for absolute live accuracy of Plan, Role & Status across serverless lambdas
+  let user = db.users.find(u => u.email.toLowerCase() === emailLower);
+
+  // Merge live status from Supabase without wiping out local users
   if (dbManager && typeof dbManager.fetchUsersFromSupabase === 'function') {
     try {
       const supaUsers = await dbManager.fetchUsersFromSupabase();
       if (supaUsers && Array.isArray(supaUsers)) {
-        db.users = supaUsers;
-        user = supaUsers.find(u => u.email.toLowerCase() === emailLower);
+        for (const su of supaUsers) {
+          const idx = db.users.findIndex(u => u.email.toLowerCase() === su.email.toLowerCase());
+          if (idx >= 0) db.users[idx] = { ...db.users[idx], ...su };
+          else db.users.push(su);
+        }
+        user = db.users.find(u => u.email.toLowerCase() === emailLower);
       }
     } catch (e) {}
-  }
-  if (!user) {
-    user = db.users.find(u => u.email.toLowerCase() === emailLower);
   }
 
   if (!user) return res.json({ success: false, notFound: true });

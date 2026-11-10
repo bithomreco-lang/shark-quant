@@ -896,11 +896,7 @@ export default function App() {
         const res = await fetch(`${BACKEND_URL}/api/users/me?email=${encodeURIComponent(currentUser.email)}`);
         const d = await res.json();
         if (d && d.notFound) {
-          // If the database was emptied or user was deleted in Admin Panel, log out immediately!
-          setCurrentUser(null);
-          if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-            window.localStorage.removeItem('shark_saved_user');
-          }
+          // Never log out on temporary sync mismatch or OAuth completion delay
           return;
         }
         if (d && d.success && d.user) {
@@ -3336,13 +3332,47 @@ export default function App() {
                 setGoogleLoading(false);
                 setAuthModalVisible(false);
 
-                try {
-                  localStorage.setItem('shark_user', JSON.stringify(pData.user));
-                  if (pData.token) localStorage.setItem('shark_sb_token', pData.token);
-                } catch (e) {}
+                const u = pData.user;
+                if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+                  try {
+                    window.localStorage.setItem('shark_saved_user', JSON.stringify(u));
+                    window.localStorage.setItem('shark_user', JSON.stringify(u));
+                    if (pData.token) window.localStorage.setItem('shark_sb_token', pData.token);
+                  } catch (e) {}
+                }
 
-                setCurrentUser(pData.user);
-                showAppToast(`تم ربط حسابك بنجاح! 🦈✅ مرحباً ${pData.user.name || pData.user.username}`);
+                setCurrentUser(u);
+
+                const userSessions = Array.isArray(u.sessionsList) && u.sessionsList.length > 0
+                  ? u.sessionsList
+                  : [{ id: 'session_1', title: 'تحليل السيولة الرئيسي', updatedAt: 'الآن' }];
+                setSessionsList(userSessions);
+                const firstSessionId = userSessions[0]?.id || 'session_1';
+                setCurrentSessionId(firstSessionId);
+
+                const userMsgs = u.sessionsMessages && typeof u.sessionsMessages === 'object' && Object.keys(u.sessionsMessages).length > 0
+                  ? u.sessionsMessages
+                  : {
+                      [firstSessionId]: [
+                        {
+                          id: 'welcome_' + Date.now(),
+                          sender: 'ai',
+                          type: 'ai_msg',
+                          text: `مرحباً بك يا **${u.name || u.username}** في مكتب **SHARK QUANT** المؤسسي! 🦈\n\nتم توثيق حسابك بنجاح عبر Google: **${u.email}**\n\nأنا مستشارك المالي والكمي المباشر لتحليل شارتات الذهب والعملات والأسواق.\nما هو الأصل الذي تريد تحليله الآن؟ (مثلاً: الذهب XAUUSD، البيتكوين BTC، أو الناسداك)`,
+                          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        }
+                      ]
+                    };
+                setSessionsMessages(userMsgs);
+
+                if (u.balance) {
+                  updateGlobalBalance(String(u.balance));
+                }
+                if (u.riskPercent) {
+                  updateGlobalRisk(Number(u.riskPercent));
+                }
+
+                showAppToast(`تم ربط حسابك بنجاح! 🦈✅ مرحباً ${u.name || u.username}`);
                 fetchUsersDirectory();
               }
             } catch (pErr) {}
