@@ -2,6 +2,14 @@
   "cleanUrls": true,
   "rewrites": [
     {
+      "source": "/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/(.*)",
+      "destination": "/fonts/$1"
+    },
+    {
+      "source": "/app/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/(.*)",
+      "destination": "/fonts/$1"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/index.js"
     },
@@ -22,11 +30,24 @@
       "destination": "/app/index.html"
     },
     {
-      "source": "/((?!assets|downloads|_expo|api|.*\\..*).*)",
+      "source": "/((?!assets|downloads|fonts|_expo|api|.*\\..*).*)",
       "destination": "/index.html"
     }
   ],
   "headers": [
+    {
+      "source": "/fonts/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
     {
       "source": "/downloads/(.*)",
       "headers": [
