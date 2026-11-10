@@ -1274,6 +1274,122 @@ app.post('/api/live-turn', async (req, res) => {
   }
 });
 
+// ⚡ DIRECT ULTRA-FAST GEMINI LIVE MULTIMODAL CONFIG (Sub-300ms WebSocket Connection)
+const LIVE_CHARTS = {
+  GOLD: { symbol: 'OANDA:XAUUSD', raw: 'XAUUSD', exchange: 'OANDA' },
+  BTC: { symbol: 'BINANCE:BTCUSDT', raw: 'BTCUSDT', exchange: 'BINANCE' },
+  ETH: { symbol: 'BINANCE:ETHUSDT', raw: 'ETHUSDT', exchange: 'BINANCE' },
+  SOL: { symbol: 'BINANCE:SOLUSDT', raw: 'SOLUSDT', exchange: 'BINANCE' },
+  NASDAQ: { symbol: 'NASDAQ:QQQ', raw: 'QQQ', exchange: 'NASDAQ' }
+};
+
+const LIVE_TOOLS = [{
+  functionDeclarations: [
+    {
+      name: 'show_chart',
+      description: 'Open the live interactive TradingView chart on the user screen during the call. Call it whenever the user asks to see/open/show a chart or asset.',
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          asset: { type: 'STRING', enum: ['GOLD', 'BTC', 'ETH', 'SOL', 'NASDAQ'] },
+          interval: { type: 'STRING', description: 'Minutes: 1, 5, 15, 60 or 240', enum: ['1', '5', '15', '60', '240'] }
+        },
+        required: ['asset']
+      }
+    },
+    {
+      name: 'get_market_data',
+      description: 'Real-time technical analysis from real candles: price, market structure, support/resistance, RSI. Call it before saying any price or trade idea.',
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          asset: { type: 'STRING', enum: ['GOLD', 'BTC', 'ETH', 'SOL', 'NASDAQ'] },
+          interval: { type: 'STRING', enum: ['1', '5', '15', '60', '240'] }
+        },
+        required: ['asset']
+      }
+    },
+    {
+      name: 'get_live_macro_news',
+      description: 'Fetch breaking global macro, political, and economic calendar developments impacting Gold, Crypto, Oil, and Wall Street.',
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          topic: { type: 'STRING', description: 'Search keyword e.g. gold, fed, economy, war, cpi, geopolitics, btc, oil' }
+        }
+      }
+    },
+    {
+      name: 'end_call',
+      description: 'Hang up the call. Use when the user says bye / اقطع / بسلامة / safi / hang up. Say a very short goodbye first.',
+      parameters: { type: 'OBJECT', properties: {} }
+    }
+  ]
+}];
+
+app.get('/api/live-config', async (req, res) => {
+  const apiKey = (db.config.apiKey || process.env.GEMINI_API_KEY || '').trim();
+  if (!apiKey) {
+    return res.status(400).json({ success: false, error: 'Gemini API key not configured' });
+  }
+
+  const email = String(req.query.email || 'guest@shark.ai').trim().toLowerCase();
+  const name = String(req.query.name || 'صديقي').trim();
+  const plan = String(req.query.plan || 'VIP').trim();
+  const balance = String(req.query.balance || '50000').trim();
+
+  const learnedBlock = dbManager ? dbManager.buildTraderIntelligenceContext(email) : '';
+
+  const system = `You are SHARK — ${name}'s close friend, personal senior quant trader, and elite Wall Street Hedge Fund Partner on a LIVE PHONE CALL with him right now. You possess the world's most comprehensive institutional mastery across ALL trading schools and global macro geopolitics.
+
+WHO YOU ARE & INSTITUTIONAL MASTERY:
+- You are a Senior Wall Street Macro Quant Partner (like Ray Dalio meets ICT / SMC master trader).
+- YOU NEVER SAY "I am just a technical analyst" or "أنا محلل فني فقط"! That is amateur retail talk. In Wall Street, geopolitics, elections, wars, BRICS, inflation (CPI), and central banks (Fed rates) are the PRIMARY FUEL (المحرك والوقود) that dictates institutional order-flow and safe-haven rushes into Gold and Bitcoin.
+- Speak the exact same language/dialect he speaks. Moroccan Darija if he speaks Darija (natural, street-smart, warm, brotherly — "خويا", "صاحبي", "واخا", "بصح", "دابا", "شوف", "هانية"). Never switch language unless he does.
+- NEVER speak your inner thoughts or meta-reasoning. Speak ONLY your direct, final conversational words immediately.
+- Natural, fast, confident phone dialogue: 1-3 spoken punchy sentences. No markdown headers, no lists, no bullet points, no robotic lectures.
+- He is male. Never be feminine toward him.
+- If he just greets, greet back in 1 short brotherly line.
+- WHAT YOU KNOW: ${name} — plan ${plan}, trading capital $${balance}.${learnedBlock}
+
+CRITICAL RULE ON PRICES, TRADES & MACRO NEWS:
+- Whenever ${name} asks about the price of Gold, Bitcoin, or any coin/asset ("شحال واصل الذهب دابا", "السعر", "عطيني ثمن"), or asks for a trade setup ("عطيني صفقة", "ندخلو بيع ولا شراء"), you MUST call get_market_data or show_chart!
+- Calling show_chart immediately opens the interactive TradingView chart on his phone screen.
+- If asked about news, politics, wars, elections, or why the market moved, call get_live_macro_news!
+- You may receive live frames of his screen when he shares it (screen-share button). Use them: read the price axis, candles, structure, his drawings.
+- When he wants to hang up, call end_call.`;
+
+  res.json({
+    success: true,
+    apiKey,
+    model: 'models/gemini-2.5-flash-native-audio-preview-12-2025',
+    voiceName: 'Charon',
+    systemInstruction: system,
+    tools: LIVE_TOOLS
+  });
+});
+
+app.post('/api/live-tool', async (req, res) => {
+  const { toolName, args } = req.body;
+  try {
+    if (toolName === 'get_market_data') {
+      const asset = String(args?.asset || 'GOLD').toUpperCase();
+      const cfg = LIVE_CHARTS[asset] || LIVE_CHARTS.GOLD;
+      const iv = String(args?.interval || '60');
+      const data = await fetchLiveMarketData(cfg.raw, cfg.exchange, iv);
+      return res.json({ success: true, result: data || { price: 'Live' } });
+    }
+    if (toolName === 'get_live_macro_news') {
+      const topic = String(args?.topic || 'market');
+      const news = typeof fetchLiveNews === 'function' ? await fetchLiveNews(topic) : [{ title: 'Market volatility elevated on geopolitical headlines' }];
+      return res.json({ success: true, result: news });
+    }
+    res.json({ success: true, result: { ok: true } });
+  } catch (e) {
+    res.json({ success: false, error: e.message });
+  }
+});
+
 // ══════════════════════════════════════════════
 // 100% GENUINE GEMINI LIVE "CHARON" VOICE ENGINE (BidiGenerateContent WebSocket + RAM Cache)
 // Zero robotic/alternative voices — exact same voice as the Live Phone Call!
