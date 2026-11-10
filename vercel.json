@@ -1,9 +1,10 @@
 {
-  "framework": null,
-  "buildCommand": null,
-  "installCommand": null,
   "cleanUrls": true,
   "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.js"
+    },
     {
       "source": "/admin",
       "destination": "/admin/index.html"
@@ -21,7 +22,7 @@
       "destination": "/app/index.html"
     },
     {
-      "source": "/((?!assets|downloads|_expo|.*\\..*).*)",
+      "source": "/((?!assets|downloads|_expo|api|.*\\..*).*)",
       "destination": "/index.html"
     }
   ],

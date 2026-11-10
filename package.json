@@ -1,0 +1,13 @@
+{
+  "name": "shark-quant",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@supabase/supabase-js": "^2.119.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "msedge-tts": "^2.1.1",
+    "node-fetch": "^2.7.0"
+  }
+}
