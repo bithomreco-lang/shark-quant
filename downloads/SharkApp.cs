@@ -110,20 +110,21 @@ namespace SharkTradersAI
             if (string.IsNullOrEmpty(url)) return;
             try
             {
+                // Open via Windows Shell — this uses default browser with active logged-in profile (bypasses profile picker!)
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+                return;
+            }
+            catch { }
+
+            try
+            {
                 string chrome = @"C:\Program Files\Google\Chrome\Application\chrome.exe";
                 if (!File.Exists(chrome)) chrome = @"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe";
 
                 if (File.Exists(chrome))
                 {
                     Process.Start(new ProcessStartInfo(chrome, "\"" + url + "\"") { UseShellExecute = false });
-                    return;
                 }
-            }
-            catch { }
-
-            try
-            {
-                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
             }
             catch { }
         }

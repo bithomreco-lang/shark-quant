@@ -116,24 +116,37 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
   };
 
   function initSupabaseClient() {
-    const url = (process.env.SUPABASE_URL || db.config.supabaseUrl || '').trim();
-    const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || db.config.supabaseKey || '').trim();
-    if (url && key && url.startsWith('http')) {
-      try {
-        supabase = createClient(url, key, {
-          auth: { persistSession: false }
-        });
-        console.log('⚡ Connected to Supabase PostgreSQL Cloud:', url);
-        setTimeout(() => {
-          syncAllDataToSupabase().catch(() => { });
-        }, 500);
-        return true;
-      } catch (err) {
-        console.warn('Supabase init error:', err.message);
+    let url = (process.env.SUPABASE_URL || db.config.supabaseUrl || '').trim();
+    let key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || db.config.supabaseKey || '').trim();
+
+    // Auto-detect if user swapped URL and KEY or pasted secret key into URL variable
+    if (url.startsWith('sb_') || url.startsWith('ey') || !url.startsWith('http')) {
+      if (url.startsWith('sb_') || url.startsWith('ey')) {
+        key = url;
       }
+      url = 'https://krukhcmndvuklflxprvr.supabase.co';
     }
-    supabase = null;
-    return false;
+    if (!url || !url.startsWith('http')) {
+      url = 'https://krukhcmndvuklflxprvr.supabase.co';
+    }
+    if (!key || key.length < 10) {
+      key = 'sb_publishable_MPI-lFS-ZRuopxnWXZGcbg_AwkhTSST';
+    }
+
+    db.config.supabaseUrl = url;
+    db.config.supabaseKey = key;
+
+    try {
+      supabase = createClient(url, key, {
+        auth: { persistSession: false }
+      });
+      console.log('⚡ Connected to Supabase PostgreSQL Cloud:', url);
+      return true;
+    } catch (err) {
+      console.warn('Supabase init error:', err.message);
+      supabase = null;
+      return false;
+    }
   }
 
   // Periodic background check: if RLS was locked earlier, retry automatically so the moment the user runs the SQL or updates the key, all data populates immediately!
