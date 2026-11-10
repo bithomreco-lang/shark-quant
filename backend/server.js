@@ -20,8 +20,20 @@ if (fs.existsSync(LANDING_DIR)) {
   app.use(express.static(LANDING_DIR));
   app.use('/app', express.static(path.join(LANDING_DIR, 'app')));
   app.use('/admin', express.static(path.join(LANDING_DIR, 'admin')));
+  app.use('/admin-app', express.static(path.join(LANDING_DIR, 'admin-app')));
   app.use('/downloads', express.static(path.join(LANDING_DIR, 'downloads')));
   app.use('/_expo', express.static(path.join(LANDING_DIR, '_expo')));
+
+  // Clean Dashboard & Terminal Aliases
+  app.get(['/dashboard', '/dashboard/*'], (req, res) => {
+    res.redirect('/app');
+  });
+  app.get(['/admin-dashboard', '/admin/dashboard'], (req, res) => {
+    res.redirect('/admin');
+  });
+  app.get('/app/*', (req, res) => {
+    res.sendFile(path.join(LANDING_DIR, 'app', 'index.html'));
+  });
 }
 
 const DB_FILE = path.join(__dirname, 'database.json');
