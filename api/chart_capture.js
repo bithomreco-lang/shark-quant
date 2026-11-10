@@ -3,16 +3,16 @@ const path = require('path');
 let puppeteer = null;
 try {
   puppeteer = require('puppeteer-core');
-} catch (e) {}
+} catch (e) { }
 
 const CHROME_PATH = process.env.CHROME_PATH ||
   (fs.existsSync('C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe')
     ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
     : (fs.existsSync('C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe')
-        ? 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
-        : (fs.existsSync('/usr/bin/chromium')
-            ? '/usr/bin/chromium'
-            : (fs.existsSync('/usr/bin/google-chrome') ? '/usr/bin/google-chrome' : null))));
+      ? 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
+      : (fs.existsSync('/usr/bin/chromium')
+        ? '/usr/bin/chromium'
+        : (fs.existsSync('/usr/bin/google-chrome') ? '/usr/bin/google-chrome' : null))));
 
 async function captureTradingViewScreenshot(symbol = 'OANDA:XAUUSD', interval = '60') {
   if (!CHROME_PATH) return null;
@@ -21,7 +21,7 @@ async function captureTradingViewScreenshot(symbol = 'OANDA:XAUUSD', interval = 
   const uploadsDir = path.join(__dirname, 'public', 'uploads');
   try {
     if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-  } catch (err) {}
+  } catch (err) { }
   const outPath = path.join(uploadsDir, filename);
   const chartUrl = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${encodeURIComponent(symbol)}&interval=${interval}&hidesidetoolbar=1&symboledit=0&saveimage=0&toolbarbg=0A0D14&studies=[]&theme=dark&style=1&timezone=exchange&locale=en`;
 
@@ -56,7 +56,7 @@ async function captureTradingViewScreenshot(symbol = 'OANDA:XAUUSD', interval = 
     console.warn('Puppeteer chart capture warning:', err.message);
   } finally {
     if (browser) {
-      try { await browser.close(); } catch (e) {}
+      try { await browser.close(); } catch (e) { }
     }
   }
   return null;

@@ -15,7 +15,7 @@ for (const dir of [UPLOADS_DIR, AVATARS_DIR, AUDIO_DIR]) {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-  } catch (err) {}
+  } catch (err) { }
 }
 
 /**
@@ -125,7 +125,7 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
         });
         console.log('⚡ Connected to Supabase PostgreSQL Cloud:', url);
         setTimeout(() => {
-          syncAllDataToSupabase().catch(() => {});
+          syncAllDataToSupabase().catch(() => { });
         }, 500);
         return true;
       } catch (err) {
@@ -139,7 +139,7 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
   // Periodic background check: if RLS was locked earlier, retry automatically so the moment the user runs the SQL or updates the key, all data populates immediately!
   setInterval(() => {
     if (supabase && !lastSupabaseSyncReport.ok) {
-      syncAllDataToSupabase().catch(() => {});
+      syncAllDataToSupabase().catch(() => { });
     }
   }, 10000);
 
@@ -449,7 +449,7 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
         };
         fs.writeFileSync(dbFilePath, JSON.stringify(cleanDiskSnapshot, null, 2));
         if (supabase) {
-          syncAllDataToSupabase().catch(() => {});
+          syncAllDataToSupabase().catch(() => { });
         }
       } catch (err) {
         console.error('Error writing structured database.json:', err.message);
@@ -752,7 +752,7 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
         await supabase.from('users').delete().eq('email', emailLower);
         await supabase.from('ai_learning_memory').delete().eq('user_email', emailLower);
         await supabase.from('user_conversations').delete().eq('user_email', emailLower);
-      } catch (e) {}
+      } catch (e) { }
     }
     return removed;
   }
@@ -858,7 +858,7 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
           };
           db.users.push(user);
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     if (username && username.trim()) {
