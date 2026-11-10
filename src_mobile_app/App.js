@@ -6589,8 +6589,52 @@ export default function App() {
               </View>
             </View>
 
-            {/* 2. IN-CALL TRADINGVIEW CHART, LIVE WEB VIEW, OR SHARK AVATAR */}
-            {callActiveView?.type === 'web' ? (
+            {/* 2. IN-CALL TRADINGVIEW CHART, LIVE WEB VIEW, YOUTUBE, OR SHARK AVATAR */}
+            {callActiveView?.type === 'youtube' ? (
+              <View style={styles.inCallChartWrapper}>
+                <View style={styles.inCallChartHeader}>
+                  <View style={styles.inCallChartAssetInfo}>
+                    <View style={[styles.inCallChartLiveDot, { backgroundColor: '#FF0000' }]} />
+                    <Text style={styles.inCallChartTitle} numberOfLines={1}>
+                      📺 {callActiveView.title || 'YOUTUBE LIVE BROADCAST'}
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TouchableOpacity
+                      style={[styles.browserExtBtn, { borderColor: '#FF0055', backgroundColor: 'rgba(255, 0, 85, 0.15)' }]}
+                      onPress={() => openExternalLink(callActiveView.embedUrl || 'https://www.youtube.com')}
+                    >
+                      <Text style={[styles.browserExtBtnText, { color: '#FF0055' }]}>YouTube ↗</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.inCallCloseChartBtn}
+                      onPress={() => setCallActiveView(null)}
+                    >
+                      <Ionicons name="close" size={16} color="#FF0055" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* AI Visual Vision On-Air Badge */}
+                <View style={[styles.inCallVisionBadge, { borderColor: 'rgba(255, 0, 85, 0.4)', backgroundColor: 'rgba(255, 0, 85, 0.12)' }]}>
+                  <Text style={[styles.inCallVisionBadgeText, { color: '#FF4D6D' }]}>
+                    🔴 بث يوتيوب حي • الحوت يتابع البث ويحلل الأخبار معك على المباشر
+                  </Text>
+                </View>
+
+                {/* Real YouTube Embedded Player */}
+                {Platform.OS === 'web' && callActiveView.embedUrl ? (
+                  <iframe
+                    src={callActiveView.embedUrl}
+                    style={{ width: '100%', height: 380, border: 'none', backgroundColor: '#000', borderRadius: 8 }}
+                    title={callActiveView.title || 'YouTube Live Player'}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                ) : null}
+              </View>
+            ) : callActiveView?.type === 'web' ? (
               <View style={styles.inCallChartWrapper}>
                 <View style={styles.inCallChartHeader}>
                   <View style={styles.inCallChartAssetInfo}>
@@ -6601,6 +6645,25 @@ export default function App() {
                   </View>
 
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {/* Interactive Scroll Down / Up Buttons */}
+                    <TouchableOpacity
+                      style={[styles.browserExtBtn, { paddingHorizontal: 8 }]}
+                      onPress={() => {
+                        sendLiveCallMessage('هبط لتحت فالصفحة وسكرولي نشوف الباقي');
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.browserExtBtnText}>⬇️ هبط</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.browserExtBtn, { paddingHorizontal: 8 }]}
+                      onPress={() => {
+                        sendLiveCallMessage('طلع الفوق فالصفحة');
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.browserExtBtnText}>⬆️ طلع</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.browserExtBtn}
                       onPress={() => openExternalLink(callActiveView.url)}

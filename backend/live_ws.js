@@ -2,7 +2,7 @@
 // The API key never leaves the server.
 const WebSocket = require('ws');
 const { analyze } = require('./market_analysis');
-const { captureTradingViewScreenshot, captureWebScreenshot } = require('./chart_capture');
+const { captureTradingViewScreenshot, captureWebScreenshot, scrollActivePage, searchYouTubeFinancial } = require('./chart_capture');
 
 const LIVE_MODEL = 'models/gemini-3.8-live';
 const VOICE = 'Charon'; // deep, calm male voice
@@ -99,6 +99,29 @@ const TOOLS = [{
       }
     },
     {
+      name: 'scroll_web_page',
+      description: 'Scroll the currently open website page down or up to see lower paragraphs, tables, economic figures, or comments. Call whenever the user says "هبط لتحت", "سكرولي لتحت", "طلع الفوق", "scroll down", or "scroll up".',
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          direction: { type: 'STRING', enum: ['down', 'up'], description: 'Scroll direction (down or up)' },
+          amount: { type: 'NUMBER', description: 'Pixels to scroll, e.g. 600' }
+        },
+        required: ['direction']
+      }
+    },
+    {
+      name: 'search_youtube_news',
+      description: 'Search YouTube for breaking financial live news, market analysis, Fed press conferences, or trading podcasts. Directly opens and plays the video on the user screen and analyzes the broadcast. Call whenever the user asks for YouTube, videos, or broadcasts.',
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          topic: { type: 'STRING', description: 'Topic or keyword to search on YouTube, e.g. "gold analysis live", "fed interest rate", "bitcoin breaking"' }
+        },
+        required: ['topic']
+      }
+    },
+    {
       name: 'end_call',
       description: 'Hang up the call. Use when the user says bye / اقطع / بسلامة / safi / hang up. Say a very short goodbye first.',
       parameters: { type: 'OBJECT', properties: {} }
@@ -161,6 +184,8 @@ WHO YOU ARE & YOUR PLATFORM:
   5. Executive Trade Signals (صفقات واضحة مع إدارة المخاطر): Precise Entry, Stop Loss (1.5x ATR), and Take Profit (1:3+ R:R) adapted to his balance ($${balance}).
   6. Post to Community On His Behalf (النشر في المجتمع بصوته): When he says "اكتب رسالة فالمجتمع قول ليهم...", you call post_to_community and publish the message into the community feed under his actual name and avatar!
   7. In-App Web Browser & Scraping (متصفح وقارئ مواقع لايف): When he asks to open or check any website/link (Investing, ForexFactory, Reuters, etc.), you open the in-app browser with open_in_app_browser and scrape/analyze it with browse_and_analyze_web!
+  8. Interactive Scrolling (السكرول التفاعلي في المواقع): When he says "هبط لتحت", "سكرولي لتحت", "طلع الفوق", call scroll_web_page to reveal lower paragraphs and tables. You receive the new visual snapshot in real-time!
+  9. YouTube Live Broadcasts & Analysis (يوتيوب والأخبار المرئية): When he asks for YouTube or video news ("شوف يوتيوب شنو واقع", "جيب ليا لايف الفيدرالي في يوتيوب"), call search_youtube_news to open and play the video right in his call viewport!
 
 COMMUNITY OMNISCIENCE & TRADER PSYCHOLOGY:
 - You know ${name}'s mindset, their recent chats, and what they said in the community:${userCommunityBlock || ' (No previous community posts yet)'}
@@ -395,7 +420,7 @@ Trade ideas: give entry, stop and target clearly but briefly, with risk sized fo
               const browserTitle = String(fc.args?.title || targetUrl.replace(/^https?:\/\//, '').split('/')[0]).trim();
               const summary = String(fc.args?.summary || 'عرض وتحليل فوري لصفحة الويب').trim();
 
-              // Send viewport switch to client right into the main in-call screen!
+              // Send initial state to client
               send({
                 type: 'in_call_viewport',
                 viewType: 'web',
@@ -404,59 +429,80 @@ Trade ideas: give entry, stop and target clearly but briefly, with risk sized fo
                 summary
               });
 
-              // Also capture high-res full visual snapshot using real headless Chrome
-              // and feed it directly into Gemini Live's visual eyes (mediaChunks) on-air!
-              captureWebScreenshot(targetUrl).then(cap => {
-                if (cap && cap.base64) {
-                  if (upstream.readyState === WebSocket.OPEN) {
-                    upstream.send(JSON.stringify({
-                      realtimeInput: {
-                        mediaChunks: [{ mimeType: 'image/jpeg', data: cap.base64 }]
-                      }
-                    }));
+              // AWAIT the visual screenshot so Gemini Live gets the image BEFORE speaking!
+              const cap = await captureWebScreenshot(targetUrl);
+              if (cap && cap.base64 && upstream.readyState === WebSocket.OPEN) {
+                upstream.send(JSON.stringify({
+                  realtimeInput: {
+                    mediaChunks: [{ mimeType: 'image/jpeg', data: cap.base64 }]
                   }
-                  // Notify client of the crisp rendered screenshot
-                  send({
-                    type: 'in_call_viewport',
-                    viewType: 'web',
-                    url: targetUrl,
-                    title: browserTitle,
-                    summary,
-                    screenshotUrl: cap.filePath
-                  });
-                }
-              }).catch(() => {});
-
-              // Quick text extraction for immediate background context
-              let extracted = '';
-              try {
-                const fetchFn = typeof fetch !== 'undefined' ? fetch : require('node-fetch');
-                const ctl = new AbortController();
-                const to = setTimeout(() => ctl.abort(), 5000);
-                const r = await fetchFn(targetUrl, {
-                  signal: ctl.signal,
-                  headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                  }
+                }));
+                send({
+                  type: 'in_call_viewport',
+                  viewType: 'web',
+                  url: targetUrl,
+                  title: cap.title || browserTitle,
+                  summary,
+                  screenshotUrl: cap.filePath
                 });
-                clearTimeout(to);
-                const html = await r.text();
-                extracted = html
-                  .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-                  .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-                  .replace(/<[^>]+>/g, ' ')
-                  .replace(/\s+/g, ' ')
-                  .trim()
-                  .substring(0, 3000);
-              } catch (e) {}
+              }
 
               result = {
                 ok: true,
                 url: targetUrl,
-                title: browserTitle,
-                pageText: extracted,
+                title: cap?.title || browserTitle,
                 visualFedToEyes: true,
-                directive: 'You are now viewing the full visual screenshot and content of this page live. Analyze what you see for the user in Darija.'
+                directive: 'The actual visual screenshot of this webpage is in your vision right now! Speak immediately describing what you see on the screen in natural Darija.'
+              };
+            } else if (fc.name === 'scroll_web_page') {
+              const dir = String(fc.args?.direction || 'down').toLowerCase();
+              const amt = Number(fc.args?.amount) || 600;
+              const cap = await scrollActivePage(dir, amt);
+              if (cap && cap.base64 && upstream.readyState === WebSocket.OPEN) {
+                upstream.send(JSON.stringify({
+                  realtimeInput: {
+                    mediaChunks: [{ mimeType: 'image/jpeg', data: cap.base64 }]
+                  }
+                }));
+                send({
+                  type: 'in_call_viewport',
+                  viewType: 'web',
+                  url: cap.url,
+                  title: cap.title,
+                  screenshotUrl: cap.filePath,
+                  currentScrollY: cap.currentScrollY
+                });
+              }
+              result = {
+                ok: true,
+                scrolled: dir,
+                directive: 'You have scrolled the page down. The newly revealed content is now in your vision. Describe what you see in Darija.'
+              };
+            } else if (fc.name === 'search_youtube_news') {
+              const topic = String(fc.args?.topic || 'gold market news live').trim();
+              const yt = await searchYouTubeFinancial(topic);
+              if (yt.screenshot && yt.screenshot.base64 && upstream.readyState === WebSocket.OPEN) {
+                upstream.send(JSON.stringify({
+                  realtimeInput: {
+                    mediaChunks: [{ mimeType: 'image/jpeg', data: yt.screenshot.base64 }]
+                  }
+                }));
+              }
+              send({
+                type: 'in_call_viewport',
+                viewType: 'youtube',
+                embedUrl: yt.embedUrl,
+                videoId: yt.topVideoId,
+                title: yt.title,
+                query: topic,
+                screenshotUrl: yt.screenshot ? yt.screenshot.filePath : null
+              });
+              result = {
+                ok: true,
+                platform: 'youtube',
+                videoTitle: yt.title,
+                embedUrl: yt.embedUrl,
+                directive: 'YouTube video broadcast is now open on the user screen inside the call. Discuss the live video topic with the user in Darija.'
               };
             } else if (fc.name === 'end_call') {
               hangupPending = true;
