@@ -72,3 +72,4 @@ Because Gemini Live requires persistent **WebSockets** (`/live`), deploy the `ba
 ---
 
 *Built with passion for high-frequency institutional traders & algorithmic scalpers.*
+
