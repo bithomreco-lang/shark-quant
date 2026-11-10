@@ -115,6 +115,9 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
     lastAttemptAt: null
   };
 
+  const VERIFIED_FALLBACK_KEY = 'sb_publishable_MPI-lFS-ZRuopxnWXZGcbg_AwkhTSST';
+  const VERIFIED_SUPABASE_URL = 'https://krukhcmndvuklflxprvr.supabase.co';
+
   function initSupabaseClient() {
     let url = (process.env.SUPABASE_URL || db.config.supabaseUrl || '').trim();
     let key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || db.config.supabaseKey || '').trim();
@@ -124,13 +127,14 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
       if (url.startsWith('sb_') || url.startsWith('ey')) {
         key = url;
       }
-      url = 'https://krukhcmndvuklflxprvr.supabase.co';
+      url = VERIFIED_SUPABASE_URL;
     }
     if (!url || !url.startsWith('http')) {
-      url = 'https://krukhcmndvuklflxprvr.supabase.co';
+      url = VERIFIED_SUPABASE_URL;
     }
-    if (!key || key.length < 10) {
-      key = 'sb_publishable_MPI-lFS-ZRuopxnWXZGcbg_AwkhTSST';
+    // If key is broken (e.g. contains typo sb_secret__ with double underscore or is invalid)
+    if (!key || key.includes('sb_secret__') || key.length < 20) {
+      key = VERIFIED_FALLBACK_KEY;
     }
 
     db.config.supabaseUrl = url;
@@ -143,9 +147,16 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
       console.log('⚡ Connected to Supabase PostgreSQL Cloud:', url);
       return true;
     } catch (err) {
-      console.warn('Supabase init error:', err.message);
-      supabase = null;
-      return false;
+      console.warn('Supabase init error, falling back to verified key:', err.message);
+      try {
+        supabase = createClient(VERIFIED_SUPABASE_URL, VERIFIED_FALLBACK_KEY, {
+          auth: { persistSession: false }
+        });
+        return true;
+      } catch (e2) {
+        supabase = null;
+        return false;
+      }
     }
   }
 
@@ -911,8 +922,22 @@ function createEnterpriseDbManager(dbFilePath, defaultSystemInstruction) {
   }
 
   async function verifySupabaseOAuthToken(accessToken, desiredUsername = '') {
+    if (!supabase) initSupabaseClient();
     if (!supabase) throw new Error('Supabase غير متصل حالياً');
-    const { data, error } = await supabase.auth.getUser(accessToken);
+
+    let { data, error } = await supabase.auth.getUser(accessToken);
+    if (error && (error.message.includes('API key') || error.message.includes('apiKey') || !data?.user)) {
+      console.warn('Supabase token verification retry with verified publishable key...');
+      try {
+        const fallbackClient = createClient(VERIFIED_SUPABASE_URL, VERIFIED_FALLBACK_KEY, { auth: { persistSession: false } });
+        const retry = await fallbackClient.auth.getUser(accessToken);
+        if (retry.data?.user) {
+          data = retry.data;
+          error = null;
+        }
+      } catch (fErr) {}
+    }
+
     if (error || !data || !data.user || !data.user.email) {
       throw new Error(error?.message || 'فشل التحقق من جلسة جوجل عبر Supabase');
     }

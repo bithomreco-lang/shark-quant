@@ -2122,7 +2122,7 @@ app.get('/api/auth/supabase-config', async (req, res) => {
   if (!supabaseUrl || !supabaseUrl.startsWith('http')) {
     supabaseUrl = 'https://krukhcmndvuklflxprvr.supabase.co';
   }
-  if (!supabaseKey || supabaseKey.length < 10) {
+  if (!supabaseKey || supabaseKey.includes('sb_secret__') || supabaseKey.length < 20) {
     supabaseKey = 'sb_publishable_MPI-lFS-ZRuopxnWXZGcbg_AwkhTSST';
   }
 
