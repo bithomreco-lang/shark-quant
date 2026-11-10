@@ -1,6 +1,9 @@
 const fs = require('fs');
 const path = require('path');
-const puppeteer = require('puppeteer-core');
+let puppeteer = null;
+try {
+  puppeteer = require('puppeteer-core');
+} catch (e) {}
 
 const CHROME_PATH = process.env.CHROME_PATH ||
   (fs.existsSync('C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe')
@@ -16,7 +19,9 @@ async function captureTradingViewScreenshot(symbol = 'OANDA:XAUUSD', interval = 
   const safeSym = String(symbol || 'OANDA:XAUUSD').replace(/[^a-zA-Z0-9]/g, '_');
   const filename = `tv_${safeSym}_${interval}_${Date.now()}.png`;
   const uploadsDir = path.join(__dirname, 'public', 'uploads');
-  if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+  try {
+    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+  } catch (err) {}
   const outPath = path.join(uploadsDir, filename);
   const chartUrl = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${encodeURIComponent(symbol)}&interval=${interval}&hidesidetoolbar=1&symboledit=0&saveimage=0&toolbarbg=0A0D14&studies=[]&theme=dark&style=1&timezone=exchange&locale=en`;
 

@@ -11,9 +11,11 @@ const AVATARS_DIR = path.join(UPLOADS_DIR, 'avatars');
 const AUDIO_DIR = path.join(UPLOADS_DIR, 'audio');
 
 for (const dir of [UPLOADS_DIR, AVATARS_DIR, AUDIO_DIR]) {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
+  try {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  } catch (err) {}
 }
 
 /**
