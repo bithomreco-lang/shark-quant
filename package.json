@@ -1,9 +1,0 @@
-{
-  "name": "shark-quant",
-  "version": "1.0.0",
-  "description": "Shark Quant AI Institutional Trading Platform",
-  "scripts": {
-    "build": "echo Ready"
-  }
-}
-

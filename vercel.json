@@ -1,5 +1,7 @@
 {
-  "version": 2,
+  "framework": null,
+  "buildCommand": null,
+  "installCommand": null,
   "cleanUrls": true,
   "rewrites": [
     {
@@ -19,7 +21,7 @@
       "destination": "/app/index.html"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!assets|downloads|_expo|.*\\..*).*)",
       "destination": "/index.html"
     }
   ],
