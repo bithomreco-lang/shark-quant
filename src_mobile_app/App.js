@@ -21,7 +21,9 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 
-const BACKEND_URL = 'http://localhost:5000';
+const BACKEND_URL = (Platform.OS === 'web' && typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
+  ? (window.__SHARK_BACKEND_URL__ || (window.location.protocol + '//' + window.location.host))
+  : 'http://localhost:5000';
 const SHARK_LOGO = require('./assets/shark_aggressive_logo.png');
 
 // إزالة أي إطار أو وهج أبيض وتثبيت نافذة الويب لتجنب اختفاء الرسائل في الأسفل نهائياً
@@ -862,7 +864,7 @@ export default function App() {
                         id: 'welcome_' + Date.now(),
                         sender: 'ai',
                         type: 'ai_msg',
-                        text: `مرحباً بك يا **${d.user.name || d.user.username}** (@${d.user.username}) في مكتب **SHARK QUANT** المؤسسي! 🦈\nتم توثيق حسابك في جوجل (**${d.user.email}**) عبر **Supabase** بنجاح. ما هو الأصل الذي تريد تحليله الآن؟`,
+                        text: `مرحباً بك يا **${d.user.name || d.user.username}** في مكتب **SHARK QUANT** المؤسسي! 🦈\n\nتم توثيق حسابك بنجاح عبر Google: **${d.user.email}**\n\nأنا مستشارك المالي والكمي المباشر لتحليل شارتات الذهب والعملات والأسواق.\nما هو الأصل الذي تريد تحليله الآن؟ (مثلاً: الذهب XAUUSD، البيتكوين BTC، أو الناسداك)`,
                         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                       }
                     ]
@@ -870,7 +872,7 @@ export default function App() {
               setSessionsMessages(userMsgs);
 
               setAuthModalVisible(false);
-              showAppToast(`تم تسجيل الدخول بمصادقة Google عبر Supabase: @${d.user.username} ✅`);
+              showAppToast(`SHARK CONNECTED 🦈 ✅`);
             } else if (d && d.error) {
               showAppToast(d.error);
             }
@@ -1515,6 +1517,7 @@ export default function App() {
   // Gemini does its own voice-activity detection and handles interruptions (barge-in).
   // ─────────────────────────────────────────────
   const callWsRef = useRef(null);
+  const serverlessRecRef = useRef(null);
   const callStreamRef = useRef(null);
   const callAudioCtxRef = useRef(null);
   const callProcRef = useRef(null);
@@ -1579,6 +1582,129 @@ export default function App() {
   const handleCallSocketMessage = (ev) => {
     let m;
     try { m = JSON.parse(ev.data); } catch (e) { return; }
+
+    // 1. Setup complete from Google Gemini Live Edge (Sub-300ms direct connection)
+    if (m.setupComplete) {
+      setCallStatusMessage('🦈 متصل مباشرة بمحرك Gemini Live الفائق (أقل من نصف ثانية)');
+      const ws = callWsRef.current;
+      if (ws && ws.readyState === 1) {
+        ws.send(JSON.stringify({
+          clientContent: {
+            turns: [{
+              role: 'user',
+              parts: [{ text: `(المكالمة بدأت الآن. رحب بـ ${currentUser?.name || 'صديقي'} بجملة واحدة بالدارجة المغربية بلهجة صديق وأخ يرفع سماعة الهاتف.)` }]
+            }],
+            turnComplete: true
+          }
+        }));
+      }
+      return;
+    }
+
+    // 2. Server Content (Audio stream, transcriptions, turn completion, barge-in)
+    if (m.serverContent) {
+      const sc = m.serverContent;
+
+      // Barge-in: If user interrupts AI while speaking
+      if (sc.interrupted) {
+        flushCallPlayback();
+        callTurnFreshRef.current = true;
+      }
+
+      // Live transcript of what user spoke
+      if (sc.inputTranscription && sc.inputTranscription.text) {
+        if (callInFreshRef.current) { callInFreshRef.current = false; setCallUserLiveText(''); }
+        setCallUserLiveText((p) => (p + sc.inputTranscription.text).trimStart());
+      }
+
+      // Live transcript of what Charon AI speaks
+      if (sc.outputTranscription && sc.outputTranscription.text) {
+        callInFreshRef.current = true;
+        if (callTurnFreshRef.current) { callTurnFreshRef.current = false; setCallTranscript(''); }
+        setCallTranscript((p) => p + sc.outputTranscription.text);
+      }
+
+      // 24kHz Native PCM Audio Chunks
+      if (sc.modelTurn && sc.modelTurn.parts) {
+        for (const p of sc.modelTurn.parts) {
+          if (p.inlineData && p.inlineData.data) {
+            playCallAudioChunk(p.inlineData.data);
+          }
+        }
+      }
+
+      // Turn Complete
+      if (sc.turnComplete) {
+        callTurnFreshRef.current = true;
+      }
+      return;
+    }
+
+    // 3. Multimodal Tool Calls (show_chart, get_market_data, get_live_macro_news, end_call)
+    if (m.toolCall && m.toolCall.functionCalls) {
+      const ws = callWsRef.current;
+      for (const fc of m.toolCall.functionCalls) {
+        const fname = fc.name;
+        const fargs = fc.args || {};
+
+        if (fname === 'show_chart') {
+          const asset = String(fargs.asset || 'GOLD').toUpperCase();
+          const chartsMap = {
+            GOLD: { symbol: 'OANDA:XAUUSD', rawSymbol: 'XAUUSD', interval: fargs.interval || '60' },
+            BTC: { symbol: 'BINANCE:BTCUSDT', rawSymbol: 'BTCUSDT', interval: fargs.interval || '60' },
+            ETH: { symbol: 'BINANCE:ETHUSDT', rawSymbol: 'ETHUSDT', interval: fargs.interval || '60' },
+            SOL: { symbol: 'BINANCE:SOLUSDT', rawSymbol: 'SOLUSDT', interval: fargs.interval || '60' },
+            NASDAQ: { symbol: 'NASDAQ:QQQ', rawSymbol: 'QQQ', interval: fargs.interval || '60' }
+          };
+          const targetChart = chartsMap[asset] || chartsMap.GOLD;
+          setCallActiveChart(targetChart);
+          if (ws && ws.readyState === 1) {
+            ws.send(JSON.stringify({
+              toolResponse: {
+                functionResponses: [{
+                  id: fc.id,
+                  response: { output: { ok: true, message: `Opened live ${asset} TradingView chart on user screen` } }
+                }]
+              }
+            }));
+          }
+        } else if (fname === 'end_call') {
+          callHangupRef.current = true;
+          if (callSourcesRef.current.length === 0) setTimeout(() => endLiveCall(), 400);
+        } else {
+          fetch(`${BACKEND_URL}/api/live-tool`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ toolName: fname, args: fargs })
+          }).then(r => r.json()).then(res => {
+            if (ws && ws.readyState === 1) {
+              ws.send(JSON.stringify({
+                toolResponse: {
+                  functionResponses: [{
+                    id: fc.id,
+                    response: { output: res.result || { ok: true } }
+                  }]
+                }
+              }));
+            }
+          }).catch(() => {
+            if (ws && ws.readyState === 1) {
+              ws.send(JSON.stringify({
+                toolResponse: {
+                  functionResponses: [{
+                    id: fc.id,
+                    response: { output: { ok: true } }
+                  }]
+                }
+              }));
+            }
+          });
+        }
+      }
+      return;
+    }
+
+    // Legacy relay fallback message handlers
     switch (m.type) {
       case 'ready':
         setCallStatusMessage('📞 متصل');
@@ -1625,8 +1751,6 @@ export default function App() {
       callScreenStreamRef.current = null;
     }
     setCallScreenSharing(false);
-    const ws = callWsRef.current;
-    if (notify && ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'screen_state', on: false }));
   };
 
   const startCallScreenShare = async () => {
@@ -1658,12 +1782,14 @@ export default function App() {
         canvas.width = Math.round(video.videoWidth * scale);
         canvas.height = Math.round(video.videoHeight * scale);
         canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-        const data = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
-        ws.send(JSON.stringify({ type: 'video', data }));
+        const data = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
+        ws.send(JSON.stringify({
+          realtimeInput: {
+            mediaChunks: [{ mimeType: 'image/jpeg', data }]
+          }
+        }));
       };
 
-      const ws0 = callWsRef.current;
-      if (ws0 && ws0.readyState === 1) ws0.send(JSON.stringify({ type: 'screen_state', on: true }));
       setCallScreenSharing(true);
       setCallStatusMessage('👁️ الحوت كيشوف الشاشة دابا');
       grab();
@@ -1711,7 +1837,14 @@ export default function App() {
       const bytes = new Uint8Array(pcm.buffer);
       let bin = '';
       for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-      ws.send(JSON.stringify({ type: 'audio', data: window.btoa(bin) }));
+      const b64 = window.btoa(bin);
+
+      // Stream audio directly into Gemini Live!
+      ws.send(JSON.stringify({
+        realtimeInput: {
+          mediaChunks: [{ mimeType: 'audio/pcm;rate=16000', data: b64 }]
+        }
+      }));
     };
   };
 
@@ -1733,10 +1866,148 @@ export default function App() {
     callWsRef.current = null;
   };
 
+  const triggerLiveVoiceTurn = async (spokenText) => {
+    if (!spokenText || !liveCallActiveRef.current) return;
+
+    setCallUserLiveText(spokenText);
+    setCallStatusMessage('🧠 الحوت كيفكر وكيحلل...');
+    setIsAiSpeaking(true);
+    isAiSpeakingRef.current = true;
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/live-turn`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userEmail: currentUser?.email || 'trader@shark.ai',
+          userName: currentUser?.name || 'صديقي',
+          userPlan: currentUser?.plan || 'VIP',
+          userBalance: globalBalance || 50000,
+          text: spokenText,
+          activeChart: callActiveChart
+        })
+      });
+      const data = await res.json();
+      if (data && data.reply) {
+        setCallTranscript(data.reply);
+        if (data.chart) setCallActiveChart(data.chart);
+        setCallStatusMessage('🗣️ الحوت كيتكلم معاك...');
+
+        const onFinishedSpeaking = () => {
+          setIsAiSpeaking(false);
+          isAiSpeakingRef.current = false;
+          setCallStatusMessage('🎙️ الحوت كيسمعك دابا... تكلم');
+        };
+
+        // 🎙️ Primary: Play Genuine Gemini Live "Charon" Audio Stream out loud!
+        const voiceUrl = data.aiVoiceUrl || `/api/tts?text=${encodeURIComponent(data.reply.replace(/[*#_`>~]/g, '').substring(0, 300))}&lang=ar`;
+        const fullAudioUrl = voiceUrl.startsWith('http') ? voiceUrl : `${BACKEND_URL}${voiceUrl}`;
+        const audio = new Audio(fullAudioUrl);
+        audio.volume = 1.0;
+        audio.onended = onFinishedSpeaking;
+        audio.onerror = () => {
+          if (typeof window !== 'undefined' && window.speechSynthesis) {
+            try {
+              const utter = new SpeechSynthesisUtterance(data.reply.replace(/[*#_`>~]/g, ''));
+              utter.lang = 'ar-SA';
+              utter.onend = onFinishedSpeaking;
+              utter.onerror = onFinishedSpeaking;
+              window.speechSynthesis.speak(utter);
+              return;
+            } catch (e) {}
+          }
+          onFinishedSpeaking();
+        };
+        audio.play().catch((playErr) => {
+          console.warn('Audio play catch:', playErr);
+          if (typeof window !== 'undefined' && window.speechSynthesis) {
+            try {
+              const utter = new SpeechSynthesisUtterance(data.reply.replace(/[*#_`>~]/g, ''));
+              utter.lang = 'ar-SA';
+              utter.onend = onFinishedSpeaking;
+              utter.onerror = onFinishedSpeaking;
+              window.speechSynthesis.speak(utter);
+              return;
+            } catch (e) {}
+          }
+          onFinishedSpeaking();
+        });
+      } else {
+        setIsAiSpeaking(false);
+        isAiSpeakingRef.current = false;
+        setCallStatusMessage('🎙️ الحوت كيسمعك دابا... تكلم');
+      }
+    } catch (err) {
+      setIsAiSpeaking(false);
+      isAiSpeakingRef.current = false;
+      setCallStatusMessage('🎙️ الحوت كيسمعك دابا... تكلم');
+    }
+  };
+
   const sendLiveCallMessage = (text) => {
+    if (!text || !text.trim()) return;
+    const cleanText = text.trim();
     const ws = callWsRef.current;
-    if (text && text.trim() && ws && ws.readyState === 1) {
-      ws.send(JSON.stringify({ type: 'text', text: text.trim() }));
+    if (ws && ws.readyState === 1) {
+      ws.send(JSON.stringify({
+        clientContent: {
+          turns: [{ role: 'user', parts: [{ text: cleanText }] }],
+          turnComplete: true
+        }
+      }));
+    } else {
+      triggerLiveVoiceTurn(cleanText);
+    }
+  };
+
+  const startServerlessVoiceTurn = () => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    setCallStatusMessage('🎙️ المكالمة متصلة بالسحاب.. تكلم دابا');
+
+    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRec) {
+      setCallStatusMessage('🎙️ المتصفح لا يدعم التعرف الصوتي — اضغط على أزرار الأوامر السريعة بالأسفل');
+      return;
+    }
+
+    try {
+      if (serverlessRecRef.current) {
+        try { serverlessRecRef.current.stop(); } catch (e) {}
+      }
+      const rec = new SpeechRec();
+      rec.lang = 'ar-SA';
+      rec.continuous = true;
+      rec.interimResults = false;
+
+      rec.onstart = () => {
+        setCallStatusMessage('🎙️ الحوت كيسمعك دابا... تكلم');
+      };
+
+      rec.onresult = async (event) => {
+        if (!liveCallActiveRef.current) return;
+        const lastResult = event.results[event.results.length - 1];
+        const spokenText = lastResult[0]?.transcript?.trim();
+        if (!spokenText) return;
+
+        await triggerLiveVoiceTurn(spokenText);
+      };
+
+      rec.onerror = (e) => {
+        if (e.error !== 'no-speech' && liveCallActiveRef.current) {
+          try { rec.start(); } catch (err) {}
+        }
+      };
+
+      rec.onend = () => {
+        if (liveCallActiveRef.current) {
+          try { rec.start(); } catch (err) {}
+        }
+      };
+
+      serverlessRecRef.current = rec;
+      try { rec.start(); } catch (err) {}
+    } catch (err) {
+      console.warn('SpeechRec start error:', err);
     }
   };
 
@@ -1750,42 +2021,118 @@ export default function App() {
     setCallDuration(0);
     setCallActiveChart(null);
     setCallUserLiveText('');
-    setCallTranscript('');
+    setCallTranscript('أهلاً خويا! معك الحوت على الخط المباشر.. شنو باغي نحللو دابا؟');
     setCallMicMuted(false);
-    setCallStatusMessage('📞 كنتصل...');
+    setCallStatusMessage('📞 متصل بالمباشر...');
 
-    // Playback context must be created inside the user's click (autoplay policy).
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    const pctx = new Ctx();
-    pctx.resume && pctx.resume();
-    const gain = pctx.createGain();
-    gain.gain.value = callSpeakerRef.current ? 1 : 0;
-    gain.connect(pctx.destination);
-    callPlayCtxRef.current = pctx;
-    callPlayGainRef.current = gain;
+    // 🔊 Playback context MUST be created inside user click event to satisfy browser autoplay policies
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (Ctx) {
+        if (!callPlayCtxRef.current) {
+          const pctx = new Ctx();
+          pctx.resume && pctx.resume();
+          const gain = pctx.createGain();
+          gain.gain.value = callSpeakerRef.current ? 1 : 0;
+          gain.connect(pctx.destination);
+          callPlayCtxRef.current = pctx;
+          callPlayGainRef.current = gain;
+        } else if (callPlayCtxRef.current.state === 'suspended') {
+          callPlayCtxRef.current.resume();
+        }
+      }
+      // Prime audio playback
+      const silentAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+      silentAudio.play().catch(() => {});
+    } catch (audioInitErr) {
+      console.warn('Audio context prime warning:', audioInitErr);
+    }
 
+    // Direct Ultra-Fast Gemini Live WebSocket (Sub-300ms Native Voice & Vision)
+    let wsSetupDone = false;
     try {
       const q = new URLSearchParams({
-        email: currentUser?.email || 'hajar.trader@gmail.com',
-        name: currentUser?.name || 'Hajar',
+        email: currentUser?.email || 'trader@shark.ai',
+        name: currentUser?.name || 'صديقي',
         plan: currentUser?.plan || 'VIP',
         balance: String(globalBalance || 50000),
       });
-      const ws = new WebSocket(`${BACKEND_URL.replace(/^http/, 'ws')}/live?${q.toString()}`);
+
+      setCallStatusMessage('⚡ جاري جلب مفتاح البث الحي الفائق...');
+      const cfgRes = await fetch(`${BACKEND_URL}/api/live-config?${q.toString()}`);
+      const cfg = await cfgRes.json();
+
+      if (!cfg || !cfg.success || !cfg.apiKey) {
+        throw new Error('Could not fetch Gemini Live config');
+      }
+
+      const googleLiveWsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${cfg.apiKey}`;
+      const ws = new WebSocket(googleLiveWsUrl);
       callWsRef.current = ws;
-      ws.onmessage = handleCallSocketMessage;
-      ws.onclose = () => {
-        if (liveCallActiveRef.current && callWsRef.current === ws) setCallStatusMessage('⚠️ الاتصال تقطع');
+
+      ws.onopen = () => {
+        setCallStatusMessage('⚡ متصل بالسحاب.. جاري ضبط محرك Charon Live...');
+        ws.send(JSON.stringify({
+          setup: {
+            model: cfg.model || 'models/gemini-2.5-flash-native-audio-preview-12-2025',
+            generationConfig: {
+              responseModalities: ['AUDIO'],
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: {
+                    voiceName: cfg.voiceName || 'Charon'
+                  }
+                }
+              }
+            },
+            systemInstruction: {
+              parts: [{ text: cfg.systemInstruction }]
+            },
+            tools: cfg.tools || [],
+            inputAudioTranscription: {},
+            outputAudioTranscription: {}
+          }
+        }));
       };
-      ws.onopen = () => { openCallMic(ws).catch(() => setCallStatusMessage('⚠️ عطي الإذن للميكروفون من المتصفح')); };
+
+      ws.onmessage = (ev) => {
+        wsSetupDone = true;
+        handleCallSocketMessage(ev);
+        if (!callStreamRef.current) {
+          openCallMic(ws).catch(() => setCallStatusMessage('⚠️ عطي الإذن للميكروفون من المتصفح'));
+        }
+      };
+
+      ws.onerror = (err) => {
+        console.warn('Gemini Live WS error, using serverless fallback:', err);
+        if (!wsSetupDone && liveCallActiveRef.current) {
+          startServerlessVoiceTurn();
+          triggerLiveVoiceTurn('سلام خويا الحوت');
+        }
+      };
+
+      ws.onclose = () => {
+        if (!wsSetupDone && liveCallActiveRef.current) {
+          startServerlessVoiceTurn();
+          triggerLiveVoiceTurn('سلام خويا الحوت');
+        }
+      };
     } catch (err) {
-      setCallStatusMessage('⚠️ ما قدرتش نتصل بالسيرفر');
+      console.warn('Failed to start direct Gemini Live WS, using serverless fallback:', err);
+      if (liveCallActiveRef.current) {
+        startServerlessVoiceTurn();
+        triggerLiveVoiceTurn('سلام خويا الحوت');
+      }
     }
   };
 
   const endLiveCall = () => {
     liveCallActiveRef.current = false;
     callHangupRef.current = false;
+    if (serverlessRecRef.current) {
+      try { serverlessRecRef.current.stop(); } catch (e) {}
+      serverlessRecRef.current = null;
+    }
     teardownCall();
     setLiveCallActive(false);
     setIsAiSpeaking(false);
@@ -2195,7 +2542,13 @@ export default function App() {
       const res = await fetch(`${BACKEND_URL}/api/community/messages`);
       const d = await res.json();
       if (d && Array.isArray(d.messages)) {
-        setCommunityMessages(d.messages);
+        setCommunityMessages(prev => {
+          if (!prev || prev.length === 0) return d.messages;
+          const serverIds = new Set(d.messages.map(m => m.id));
+          // Keep recent optimistic messages so they never flicker or disappear
+          const pending = prev.filter(m => m.isMe && !serverIds.has(m.id));
+          return pending.length > 0 ? [...d.messages, ...pending] : d.messages;
+        });
         if (Array.isArray(d.blockedUsers)) {
           setBlockedUsers(d.blockedUsers);
         }
@@ -2228,7 +2581,7 @@ export default function App() {
 
   useEffect(() => {
     fetchCommunityMessages();
-    const interval = setInterval(fetchCommunityMessages, 1200); // Live real-time instant polling
+    const interval = setInterval(fetchCommunityMessages, 2000);
     return () => clearInterval(interval);
   }, []);
 
@@ -2798,28 +3151,13 @@ export default function App() {
     }
   };
 
-  const handleUpgradePlan = async (newPlan) => {
-    const updated = {
-      ...currentUser,
-      plan: newPlan
-    };
-    setCurrentUser(updated);
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.setItem('shark_saved_user', JSON.stringify(updated));
-    }
+  const handleUpgradePlan = (newPlan) => {
     setPlanUpgradeModalVisible(false);
-
-    try {
-      await fetch(`${BACKEND_URL}/api/users/upgrade-plan`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: currentUser.email,
-          plan: newPlan
-        })
-      });
-    } catch (e) {
-      console.log('Upgrade plan error:', e);
+    showAppToast(`🔒 تفعيل باقة (${newPlan}) يتطلب موافقة الآدمن. تواصل مع الإدارة لتأكيد اشتراكك.`);
+    if (typeof window !== 'undefined') {
+      try {
+        window.open('https://t.me/sharkquant', '_blank');
+      } catch (e) {}
     }
   };
 
@@ -2968,18 +3306,75 @@ export default function App() {
   const handleSupabaseGoogleOAuth = async () => {
     try {
       setGoogleLoading(true);
-      const redirectTo = Platform.OS === 'web' && typeof window !== 'undefined'
-        ? (window.location.pathname.startsWith('/app') ? window.location.href.split('#')[0].split('?')[0] : `${window.location.origin}/app`)
-        : 'http://localhost:8081';
+
+      const isDesktopApp = typeof window !== 'undefined' && Boolean(window.chrome && window.chrome.webview);
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://shark-quant-backend-auw2-blue.vercel.app';
+
+      // ── CASE A: WINDOWS DESKTOP APP (WebView2) ──
+      // Use the persistent Supabase Cloud bridge and open Google in the user's Chrome session!
+      if (isDesktopApp) {
+        let bridgeId = '';
+        try {
+          const bRes = await fetch(`${BACKEND_URL}/api/auth/bridge-init`, { method: 'POST' });
+          const bData = await bRes.json();
+          if (bData && bData.bridgeId) bridgeId = bData.bridgeId;
+        } catch (err) {}
+
+        const redirectTo = `${origin}/api/auth/bridge-callback?bridgeId=${bridgeId}`;
+        const res = await fetch(`${BACKEND_URL}/api/auth/supabase-config?redirectTo=${encodeURIComponent(redirectTo)}`);
+        const cfg = await res.json();
+
+        if (cfg && cfg.oauthUrl) {
+          let attempts = 0;
+          const pollInterval = setInterval(async () => {
+            attempts++;
+            if (attempts > 180) { // 3 minutes timeout
+              clearInterval(pollInterval);
+              setGoogleLoading(false);
+              return;
+            }
+            try {
+              const pRes = await fetch(`${BACKEND_URL}/api/auth/bridge-poll?bridgeId=${bridgeId}`);
+              const pData = await pRes.json();
+              if (pData && pData.completed && pData.user) {
+                clearInterval(pollInterval);
+                setGoogleLoading(false);
+                setAuthModalVisible(false);
+
+                try {
+                  localStorage.setItem('shark_user', JSON.stringify(pData.user));
+                  if (pData.token) localStorage.setItem('shark_sb_token', pData.token);
+                } catch (e) {}
+
+                setCurrentUser(pData.user);
+                showAppToast(`تم ربط حسابك بنجاح! 🦈✅ مرحباً ${pData.user.name || pData.user.username}`);
+                fetchUsersDirectory();
+              }
+            } catch (pErr) {}
+          }, 1200);
+
+          try {
+            window.chrome.webview.postMessage(JSON.stringify({ action: 'open_chrome', url: cfg.oauthUrl }));
+            showAppToast('🌐 جاري فتح Chrome لتسجيل الدخول.. اختر حسابك وسيتم فتح البرنامج تلقائياً!');
+          } catch (err) {
+            window.open(cfg.oauthUrl, '_blank');
+          }
+          return;
+        }
+      }
+
+      // ── CASE B: WEB BROWSER (NO POPUP, IN SAME WINDOW AS REQUESTED) ──
+      // Redirect directly in the SAME window, then return to /app#access_token and login instantly!
+      const redirectTo = `${origin}/app`;
       const res = await fetch(`${BACKEND_URL}/api/auth/supabase-config?redirectTo=${encodeURIComponent(redirectTo)}`);
       const cfg = await res.json();
-      if (cfg && cfg.oauthUrl && Platform.OS === 'web' && typeof window !== 'undefined') {
+
+      if (cfg && cfg.oauthUrl && typeof window !== 'undefined') {
         window.location.href = cfg.oauthUrl;
         return;
       }
     } catch (e) {
       showAppToast('Error connecting to Supabase Google OAuth');
-    } finally {
       setGoogleLoading(false);
     }
   };
@@ -3034,7 +3429,7 @@ export default function App() {
                   id: 'welcome_' + Date.now(),
                   sender: 'ai',
                   type: 'ai_msg',
-                  text: `مرحباً بك يا **${d.user.name || name}** (@${d.user.username || email.split('@')[0]}) في مكتب **SHARK QUANT** المؤسسي! 🦈\nتم توثيق حسابك في جوجل (**${email}**) عبر **Supabase** على باقة **${d.user.plan}** بنجاح. ما هو الأصل الذي تريد تحليله الآن؟`,
+                  text: `مرحباً بك يا **${d.user.name || name}** في مكتب **SHARK QUANT** المؤسسي! 🦈\n\nتم توثيق حسابك بنجاح عبر Google: **${email}**\n\nأنا مستشارك المالي والكمي المباشر لتحليل شارتات الذهب والعملات والأسواق.\nما هو الأصل الذي تريد تحليله الآن؟ (مثلاً: الذهب XAUUSD، البيتكوين BTC، أو الناسداك)`,
                   timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 }
               ]
@@ -3163,6 +3558,84 @@ export default function App() {
   const filteredSessions = sessionsList.filter((s) =>
     (s.title || '').toLowerCase().includes(sessionSearchQuery.toLowerCase())
   );
+
+  const renderFormattedText = (rawText) => {
+    if (!rawText) return null;
+    const lines = String(rawText).split('\n');
+    return (
+      <View style={{ width: '100%' }}>
+        {lines.map((line, idx) => {
+          const trimmed = line.trim();
+          if (!trimmed) {
+            return <View key={idx} style={{ height: 6 }} />;
+          }
+
+          // Check if header line (###, ##, #, or starts with emoji title like 📊 1. ...: or **Title:**)
+          const isHeader = trimmed.startsWith('#') || 
+            Boolean(trimmed.match(/^[📊🎯⚠️💎🔥💡📌🚀⚡📈📉][^:]+:/)) || 
+            (trimmed.startsWith('**') && trimmed.endsWith('**') && trimmed.length < 50);
+
+          const cleanHeader = trimmed.replace(/^#+\s*/, '').replace(/\*\*/g, '');
+
+          if (isHeader) {
+            return (
+              <View key={idx} style={{ marginTop: idx === 0 ? 0 : 8, marginBottom: 4, paddingBottom: 2 }}>
+                <Text
+                  style={{
+                    color: '#00E5FF',
+                    fontSize: 15,
+                    fontWeight: '900',
+                    textAlign: 'right',
+                    writingDirection: 'rtl',
+                    lineHeight: 22
+                  }}
+                >
+                  {cleanHeader}
+                </Text>
+              </View>
+            );
+          }
+
+          // Check if list item (- or • or * )
+          const isBullet = trimmed.startsWith('- ') || trimmed.startsWith('• ') || trimmed.startsWith('* ');
+          const contentLine = isBullet ? trimmed.replace(/^[-•*]\s*/, '') : trimmed;
+
+          // Parse inline bold: **bold text**
+          const parts = contentLine.split(/(\*\*[^*]+\*\*)/g);
+
+          return (
+            <View key={idx} style={{ flexDirection: 'row-reverse', alignItems: 'flex-start', marginBottom: 3 }}>
+              {isBullet && (
+                <Text style={{ color: '#00E5FF', fontSize: 14, marginLeft: 6, marginRight: 2, lineHeight: 23 }}>•</Text>
+              )}
+              <Text
+                style={{
+                  flex: 1,
+                  color: '#E1E9F5',
+                  fontSize: 14,
+                  lineHeight: 23,
+                  textAlign: 'right',
+                  writingDirection: 'rtl'
+                }}
+              >
+                {parts.map((part, pIdx) => {
+                  if (part.startsWith('**') && part.endsWith('**')) {
+                    const boldContent = part.slice(2, -2);
+                    return (
+                      <Text key={pIdx} style={{ fontWeight: '800', color: '#FFE600' }}>
+                        {boldContent}
+                      </Text>
+                    );
+                  }
+                  return <Text key={pIdx}>{part}</Text>;
+                })}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
 
   const renderItem = ({ item }) => {
     const userPlanRaw = (currentUser?.plan || 'free').toLowerCase();
@@ -3386,7 +3859,7 @@ export default function App() {
                 </View>
               ) : null}
 
-              <Text style={styles.friendlyText}>{item.text}</Text>
+              {renderFormattedText(item.text)}
 
               {item.chart && (
                 <LiveTradingViewChart symbol={item.chart.symbol} interval={item.chart.interval} />
@@ -3411,13 +3884,13 @@ export default function App() {
             <Text style={styles.cardTimeClean}>{item.timestamp}</Text>
             <View style={styles.msgShareIconsRow}>
               <TouchableOpacity onPress={() => copyAnalysis(item.text)} style={styles.iconMiniBtn} title="نسخ التحليل">
-                <Ionicons name="copy-outline" size={13} color="#8899AA" />
+                <Text style={{ fontSize: 13, lineHeight: 16 }}>📋</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => shareAnalysisToSocial(item.text, 'whatsapp')} style={styles.iconMiniBtn} title="مشاركة واتساب">
-                <Ionicons name="logo-whatsapp" size={13} color="#25D366" />
+                <Text style={{ fontSize: 13, lineHeight: 16 }}>💬</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => shareAnalysisToSocial(item.text, 'telegram')} style={styles.iconMiniBtn} title="مشاركة تليجرام">
-                <Ionicons name="paper-plane" size={12} color="#2AABEE" />
+                <Text style={{ fontSize: 13, lineHeight: 16 }}>✈️</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -4352,16 +4825,6 @@ export default function App() {
               {googleLoading ? 'CONNECTING TO GOOGLE...' : 'CONTINUE WITH GOOGLE'}
             </Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={{ marginTop: 16, padding: 8, opacity: 0.85 }}
-            onPress={() => setAuthModalVisible(true)}
-            activeOpacity={0.7}
-          >
-            <Text style={{ color: '#8E9CB0', fontSize: 11.5, fontWeight: '700', textDecorationLine: 'underline' }}>
-              أو تسجيل الدخول السريع بعنوان Gmail (@gmail.com) ✉️
-            </Text>
-          </TouchableOpacity>
         </View>
 
         {toastText && (
@@ -4370,43 +4833,6 @@ export default function App() {
             <Text style={styles.floatingToastText}>{toastText}</Text>
           </View>
         )}
-
-        <Modal visible={authModalVisible} transparent animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { maxWidth: 420, backgroundColor: '#0B0F19', borderColor: 'rgba(0, 229, 255, 0.3)', borderWidth: 1.5 }]}>
-              <Image source={SHARK_LOGO} style={{ width: 68, height: 68, alignSelf: 'center', marginBottom: 8 }} resizeMode="contain" />
-              <Text style={styles.modalTitle}>GOOGLE SIGN IN</Text>
-              <Text style={{ color: '#8E9CB0', fontSize: 11, textAlign: 'center', marginBottom: 14 }}>
-                يرجى إدخال بريد حساب Google الرسمي (@gmail.com) لتسجيل الدخول فوراً:
-              </Text>
-
-              <TextInput
-                style={[styles.modalInput, { textAlign: 'left', direction: 'ltr' }]}
-                placeholder="example@gmail.com"
-                placeholderTextColor="#64748B"
-                value={googleInputEmail}
-                onChangeText={setGoogleInputEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-              />
-
-              <TouchableOpacity
-                style={[styles.modalGoogleBtn, { backgroundColor: '#00FF66', marginTop: 10 }]}
-                onPress={() => handleGoogleSignIn()}
-                disabled={googleLoading}
-              >
-                <Ionicons name="log-in-outline" size={18} color="#000" />
-                <Text style={[styles.modalGoogleBtnText, { color: '#000', fontWeight: '900' }]}>
-                  {googleLoading ? 'AUTHENTICATING...' : 'LOGIN WITH GMAIL ✅'}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={[styles.modalCloseBtn, { marginTop: 12 }]} onPress={() => setAuthModalVisible(false)}>
-                <Text style={styles.modalCloseText}>CLOSE</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
       </SafeAreaView>
     );
   }
@@ -4739,8 +5165,8 @@ export default function App() {
                         startLiveCall();
                       }}
                     >
-                      <View style={[styles.menuIconCircle, { backgroundColor: '#00FF66' }]}>
-                        <Ionicons name="call" size={18} color="#000" />
+                      <View style={[styles.menuIconCircle, { backgroundColor: '#00FF66', justifyContent: 'center', alignItems: 'center' }]}>
+                        <Text style={{ fontSize: 16 }}>📞</Text>
                       </View>
                       <View style={styles.menuItemTextGroup}>
                         <Text style={styles.menuItemTitle}>Live Phone Call (On-Air) 📞</Text>
@@ -4755,8 +5181,8 @@ export default function App() {
                         setIsRecordingAudio(true);
                       }}
                     >
-                      <View style={[styles.menuIconCircle, { backgroundColor: '#00F0FF' }]}>
-                        <Ionicons name="mic" size={18} color="#000" />
+                      <View style={[styles.menuIconCircle, { backgroundColor: '#00F0FF', justifyContent: 'center', alignItems: 'center' }]}>
+                        <Text style={{ fontSize: 16 }}>🎙️</Text>
                       </View>
                       <View style={styles.menuItemTextGroup}>
                         <Text style={styles.menuItemTitle}>Record Voice Note 🎙️</Text>
@@ -4765,8 +5191,8 @@ export default function App() {
                     </TouchableOpacity>
 
                     <TouchableOpacity style={styles.menuItem} onPress={pickMedia}>
-                      <View style={[styles.menuIconCircle, { backgroundColor: '#FFE600' }]}>
-                        <Ionicons name="image" size={18} color="#000" />
+                      <View style={[styles.menuIconCircle, { backgroundColor: '#FFE600', justifyContent: 'center', alignItems: 'center' }]}>
+                        <Text style={{ fontSize: 16 }}>📸</Text>
                       </View>
                       <View style={styles.menuItemTextGroup}>
                         <Text style={styles.menuItemTitle}>Upload Chart / Screenshot 📸</Text>
@@ -4781,8 +5207,8 @@ export default function App() {
                         handleSend("Show me live Gold chart on 1H");
                       }}
                     >
-                      <View style={[styles.menuIconCircle, { backgroundColor: '#FF0055' }]}>
-                        <Ionicons name="stats-chart" size={18} color="#FFF" />
+                      <View style={[styles.menuIconCircle, { backgroundColor: '#FF0055', justifyContent: 'center', alignItems: 'center' }]}>
+                        <Text style={{ fontSize: 16 }}>📈</Text>
                       </View>
                       <View style={styles.menuItemTextGroup}>
                         <Text style={styles.menuItemTitle}>Inject Live Gold Chart 📈</Text>
@@ -4806,11 +5232,9 @@ export default function App() {
                   onPress={toggleMenu}
                   activeOpacity={0.8}
                 >
-                  <Ionicons
-                    name={menuOpen ? "close" : "add"}
-                    size={20}
-                    color={menuOpen ? "#000000" : "#00FF66"}
-                  />
+                  <Text style={{ fontSize: 20, fontWeight: '900', color: menuOpen ? '#000000' : '#00FF66', lineHeight: 22 }}>
+                    {menuOpen ? '✕' : '+'}
+                  </Text>
                 </TouchableOpacity>
 
                 {/* Text Input */}
@@ -4839,11 +5263,9 @@ export default function App() {
                   onPress={isRecordingAudio ? finishAiAudioRecording : startAiAudioRecording}
                   activeOpacity={0.8}
                 >
-                  <Ionicons
-                    name={isRecordingAudio ? "stop" : "mic"}
-                    size={18}
-                    color={isRecordingAudio ? "#FF0055" : "#00FF66"}
-                  />
+                  <Text style={{ fontSize: 16 }}>
+                    {isRecordingAudio ? '⏹️' : '🎙️'}
+                  </Text>
                 </TouchableOpacity>
 
                 {/* Send Button */}
@@ -4855,11 +5277,9 @@ export default function App() {
                   onPress={() => handleSend()}
                   disabled={!inputMessage.trim() && !selectedImage}
                 >
-                  <Ionicons
-                    name="arrow-up"
-                    size={18}
-                    color={(inputMessage.trim() || selectedImage) ? '#000000' : '#4E5058'}
-                  />
+                  <Text style={{ fontSize: 16, color: (inputMessage.trim() || selectedImage) ? '#000000' : '#4E5058', fontWeight: '900' }}>
+                    🚀
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -5564,11 +5984,9 @@ export default function App() {
                     onPress={() => setAdminTypeMenuOpen(!adminTypeMenuOpen)}
                     activeOpacity={0.8}
                   >
-                    <Ionicons
-                      name={isCurrentUserAdmin && adminComposerMode === 'ALPHA' ? "shield-checkmark" : (adminTypeMenuOpen ? "close" : "add")}
-                      size={20}
-                      color={(isCurrentUserAdmin && adminComposerMode === 'ALPHA') || adminTypeMenuOpen ? "#000000" : "#B5BAC1"}
-                    />
+                    <Text style={{ fontSize: 18, fontWeight: '900', color: ((isCurrentUserAdmin && adminComposerMode === 'ALPHA') || adminTypeMenuOpen) ? '#000000' : '#B5BAC1' }}>
+                      {isCurrentUserAdmin && adminComposerMode === 'ALPHA' ? '🛡️' : (adminTypeMenuOpen ? '✕' : '+')}
+                    </Text>
                   </TouchableOpacity>
 
                   {/* Discord Text Input */}
@@ -5602,11 +6020,9 @@ export default function App() {
                     onPress={isCommunityRecording ? finishCommunityAudioRecording : startCommunityAudioRecording}
                     activeOpacity={0.8}
                   >
-                    <Ionicons
-                      name={isCommunityRecording ? "stop" : (communityAudioAttachment ? "checkmark-circle" : "mic")}
-                      size={18}
-                      color={isCommunityRecording ? "#FF0055" : (communityAudioAttachment ? "#00FF66" : "#80848E")}
-                    />
+                    <Text style={{ fontSize: 16 }}>
+                      {isCommunityRecording ? '⏹️' : (communityAudioAttachment ? '✅' : '🎙️')}
+                    </Text>
                   </TouchableOpacity>
 
                   {/* Discord Send Button (Sends Text, Image, or Audio) */}
@@ -5618,11 +6034,9 @@ export default function App() {
                     onPress={() => handleSendCommunityMessage()}
                     disabled={!communityChatInput.trim() && !communityAudioAttachment && !communityImageAttachment}
                   >
-                    <Ionicons
-                      name="arrow-up"
-                      size={18}
-                      color={(communityChatInput.trim() || communityAudioAttachment || communityImageAttachment) ? '#000000' : '#4E5058'}
-                    />
+                    <Text style={{ fontSize: 16, color: (communityChatInput.trim() || communityAudioAttachment || communityImageAttachment) ? '#000000' : '#4E5058', fontWeight: '900' }}>
+                      🚀
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -6929,7 +7343,7 @@ export default function App() {
                     style={[styles.planSelectBtn, { backgroundColor: '#FFE600' }]}
                     onPress={() => handleUpgradePlan('VIP')}
                   >
-                    <Text style={[styles.planSelectBtnText, { color: '#000' }]}>UPGRADE TO VIP TRADER</Text>
+                    <Text style={[styles.planSelectBtnText, { color: '#000' }]}>REQUEST VIP ACTIVATION 🔒</Text>
                   </TouchableOpacity>
                 ) : (
                   <View style={[styles.planActiveBtn, { borderColor: '#FFE600' }]}>
@@ -6963,7 +7377,7 @@ export default function App() {
                     style={[styles.planSelectBtn, { backgroundColor: '#00FF66' }]}
                     onPress={() => handleUpgradePlan('PREMIUM')}
                   >
-                    <Text style={[styles.planSelectBtnText, { color: '#000' }]}>UPGRADE TO SHARK PREMIUM</Text>
+                    <Text style={[styles.planSelectBtnText, { color: '#000' }]}>REQUEST PREMIUM ACTIVATION 🔒</Text>
                   </TouchableOpacity>
                 ) : (
                   <View style={[styles.planActiveBtn, { borderColor: '#00FF66' }]}>
