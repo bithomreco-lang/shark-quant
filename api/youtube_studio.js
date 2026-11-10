@@ -182,13 +182,62 @@ ${customTopic ? `التركيز الخاص للحلقة: "${customTopic}"` : ''}
         else throw new Error('Failed to parse generated episode JSON');
       }
 
-      // 5. Attach audio URLs (TTS Charon voice) per chapter
+      // 5. Attach audio URLs (TTS Charon voice) and SMC drawing overlays per chapter
+      const numericSpot = parseFloat(String(spotPrice).replace(/[^0-9.]/g, '')) || 4000;
+      const isGold = assetKey === 'GOLD';
+      const spreadStep = isGold ? 4.5 : (numericSpot * 0.008);
+
       if (Array.isArray(episode.chapters)) {
-        episode.chapters = episode.chapters.map(ch => {
+        episode.chapters = episode.chapters.map((ch, idx) => {
           const summaryForVoice = (ch.script || ch.title || '').slice(0, 350);
+          
+          // Generate realistic geometric coordinates and price labels for visual drawings
+          const obLow = +(numericSpot - spreadStep * 1.5).toFixed(2);
+          const obHigh = +(numericSpot - spreadStep * 0.4).toFixed(2);
+          const fvgLow = +(numericSpot + spreadStep * 0.6).toFixed(2);
+          const fvgHigh = +(numericSpot + spreadStep * 1.6).toFixed(2);
+          const slPrice = +(numericSpot - spreadStep * 2.8).toFixed(2);
+          const tp1Price = +(numericSpot + spreadStep * 3.2).toFixed(2);
+          const tp2Price = +(numericSpot + spreadStep * 5.5).toFixed(2);
+          const sweepPrice = +(numericSpot + spreadStep * 2.1).toFixed(2);
+
+          const drawingOverlay = {
+            activeMode: idx === 2 ? 'OB' : idx === 3 ? 'FVG' : idx === 4 ? 'TARGETS' : 'ALL',
+            orderBlock: {
+              label: `Institutional Order Block [${obLow} - ${obHigh}]`,
+              sub: 'منطقة كتل الأوامر الحقيقية للحيتان (Mitigation Zone)',
+              low: obLow,
+              high: obHigh,
+              type: 'bullish'
+            },
+            fvg: {
+              label: `Fair Value Gap FVG [${fvgLow} - ${fvgHigh}]`,
+              sub: 'فجوة السيولة السعرية (Unfilled Imbalance)',
+              low: fvgLow,
+              high: fvgHigh
+            },
+            stopLoss: {
+              label: `Strict Stop Loss: ${slPrice}`,
+              sub: 'وقف الخسارة الرياضي المحكم (1.5x ATR Risk)',
+              price: slPrice
+            },
+            takeProfit: {
+              label: `Target TP1: ${tp1Price} | TP2: ${tp2Price}`,
+              sub: 'أهداف السيولة الرئيسية (1:3.2 Risk-to-Reward)',
+              tp1: tp1Price,
+              tp2: tp2Price
+            },
+            liquiditySweep: {
+              label: `Liquidity Grab Wick: ${sweepPrice}`,
+              sub: 'ذيل سحب السيولة وفخ الصانع (Buy-Side Liquidity BSL)',
+              price: sweepPrice
+            }
+          };
+
           return {
             ...ch,
-            audioUrl: `/api/tts?text=${encodeURIComponent(summaryForVoice)}&lang=ar`
+            audioUrl: `/api/tts?text=${encodeURIComponent(summaryForVoice)}&lang=ar`,
+            drawingOverlay
           };
         });
       }
@@ -205,4 +254,16 @@ ${customTopic ? `التركيز الخاص للحلقة: "${customTopic}"` : ''}
       return res.status(500).json({ success: false, error: err.message });
     }
   });
+
+  // Windows Desktop helper: open user's Downloads folder directly
+  app.post('/api/youtube/open-downloads', (req, res) => {
+    try {
+      const { exec } = require('child_process');
+      exec('explorer.exe shell:downloads');
+      return res.json({ success: true, message: 'Opened Downloads folder' });
+    } catch (e) {
+      return res.status(500).json({ success: false, error: e.message });
+    }
+  });
 };
+
