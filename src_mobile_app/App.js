@@ -1713,7 +1713,7 @@ export default function App() {
     // Legacy relay fallback message handlers
     switch (m.type) {
       case 'ready':
-        setCallStatusMessage('📞 متصل');
+        setCallStatusMessage('🦈 متصل بالمباشر — استمع للحوت...');
         break;
       case 'audio':
         playCallAudioChunk(m.data);
@@ -2068,8 +2068,7 @@ export default function App() {
       setCallStatusMessage('⚠️ عطي الإذن للميكروفون من المتصفح');
     }
 
-    // Direct Ultra-Fast Live Call (Local Development Relay or Direct Google Gemini Live)
-    let wsSetupDone = false;
+    // Direct Ultra-Fast Live Call (Node.js WebSocket Relay on port 5000)
     try {
       const q = new URLSearchParams({
         email: currentUser?.email || 'trader@shark.ai',
@@ -2078,91 +2077,47 @@ export default function App() {
         balance: String(globalBalance || 50000),
       });
 
-      const isLocal = BACKEND_URL.includes('localhost') || BACKEND_URL.includes('127.0.0.1') || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'));
-      
-      let ws = null;
-      if (isLocal) {
-        setCallStatusMessage('⚡ متصل بالسيرفر المحلي (وضع التطوير السريع)...');
-        const localWsUrl = `${BACKEND_URL.replace(/^http/, 'ws')}/live?${q.toString()}`;
-        ws = new WebSocket(localWsUrl);
-        callWsRef.current = ws;
+      setCallStatusMessage('⚡ جاري الاتصال بمحرك الحوت المباشر...');
 
-        ws.onopen = () => {
-          wsSetupDone = true;
-          setCallStatusMessage('🦈 متصل بالمباشر (خادم التطوير المحلي) — تكلم دابا');
-          openCallMic(ws);
-        };
-        ws.onmessage = handleCallSocketMessage;
-        ws.onerror = (err) => {
-          console.warn('Local WS error:', err);
-        };
-      }
+      // Connect to the local Node.js WebSocket relay (superfast, continuous, sub-second)
+      const isLocalHost = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'));
+      const wsUrl = isLocalHost
+        ? `ws://localhost:5000/live?${q.toString()}`
+        : `${BACKEND_URL.replace(/^http/, 'ws')}/live?${q.toString()}`;
 
-      if (!ws) {
-        setCallStatusMessage('⚡ جاري جلب مفتاح البث الحي الفائق...');
-        const cfgRes = await fetch(`${BACKEND_URL}/api/live-config?${q.toString()}`);
-        const cfg = await cfgRes.json();
+      const ws = new WebSocket(wsUrl);
+      callWsRef.current = ws;
 
-        if (!cfg || !cfg.success || !cfg.apiKey) {
-          throw new Error('Could not fetch Gemini Live config');
-        }
+      ws.onopen = () => {
+        setCallStatusMessage('🦈 متصل بالمباشر — استمع للحوت...');
+        openCallMic(ws);
+      };
 
-        const googleLiveWsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${cfg.apiKey}`;
-        ws = new WebSocket(googleLiveWsUrl);
-        callWsRef.current = ws;
-
-        ws.onopen = () => {
-          setCallStatusMessage('⚡ متصل بالسحاب.. جاري ضبط محرك Charon Live...');
-          ws.send(JSON.stringify({
-            setup: {
-              model: cfg.model || 'models/gemini-2.5-flash-native-audio-preview-12-2025',
-              generationConfig: {
-                responseModalities: ['AUDIO'],
-                speechConfig: {
-                  voiceConfig: {
-                    prebuiltVoiceConfig: {
-                      voiceName: cfg.voiceName || 'Charon'
-                    }
-                  }
-                }
-              },
-              systemInstruction: {
-                parts: [{ text: cfg.systemInstruction }]
-              },
-              tools: cfg.tools || [],
-              inputAudioTranscription: {},
-              outputAudioTranscription: {}
-            }
-          }));
-        };
-
-        ws.onmessage = (ev) => {
-          wsSetupDone = true;
-          handleCallSocketMessage(ev);
-          openCallMic(ws);
-        };
-      }
+      ws.onmessage = handleCallSocketMessage;
 
       ws.onerror = (err) => {
-        console.warn('Live WS error, using serverless fallback:', err);
-        if (!wsSetupDone && liveCallActiveRef.current) {
-          startServerlessVoiceTurn();
-          triggerLiveVoiceTurn('سلام خويا الحوت');
+        console.warn('WS error on', wsUrl, err);
+        if (!isLocalHost) {
+          try {
+            const fallbackWs = new WebSocket(`ws://localhost:5000/live?${q.toString()}`);
+            callWsRef.current = fallbackWs;
+            fallbackWs.onopen = () => {
+              setCallStatusMessage('🦈 متصل بالمباشر (السيرفر المحلي) — استمع للحوت...');
+              openCallMic(fallbackWs);
+            };
+            fallbackWs.onmessage = handleCallSocketMessage;
+          } catch (e) {}
         }
       };
 
       ws.onclose = () => {
-        if (!wsSetupDone && liveCallActiveRef.current) {
-          startServerlessVoiceTurn();
-          triggerLiveVoiceTurn('سلام خويا الحوت');
+        if (liveCallActiveRef.current) {
+          setCallStatusMessage('⚠️ المكالمة سالات');
         }
       };
     } catch (err) {
-      console.warn('Failed to start direct Gemini Live WS, using serverless fallback:', err);
-      if (liveCallActiveRef.current) {
-        startServerlessVoiceTurn();
-        triggerLiveVoiceTurn('سلام خويا الحوت');
-      }
+      console.warn('Failed to start Live Call:', err);
+      setCallStatusMessage('⚠️ خطأ في الاتصال بالمكالمة');
     }
   };
 

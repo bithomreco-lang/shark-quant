@@ -97,7 +97,7 @@ namespace SharkTradersAI
                     catch { }
                 };
 
-                string targetUrl = "https://shark-quant-backend-auw2-blue.vercel.app/app";
+                string targetUrl = "http://localhost:5000/app";
                 try
                 {
                     using (var client = new System.Net.WebClient())
@@ -109,7 +109,10 @@ namespace SharkTradersAI
                         }
                     }
                 }
-                catch { }
+                catch
+                {
+                    targetUrl = "https://shark-quant-backend-auw2-blue.vercel.app/app";
+                }
 
                 webView.Source = new Uri(targetUrl);
             }

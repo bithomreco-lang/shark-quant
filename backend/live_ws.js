@@ -182,7 +182,18 @@ Trade ideas: give entry, stop and target clearly but briefly, with risk sized fo
 
       if (m.setupComplete) {
         send({ type: 'ready' });
-        upstream.send(JSON.stringify({ realtimeInput: { text: `(The call just connected. Greet ${name} with one very short natural line, like a friend picking up the phone.)` } }));
+        // Trigger immediate spoken greeting in Moroccan Darija in the same second!
+        try {
+          upstream.send(JSON.stringify({
+            clientContent: {
+              turns: [{
+                role: 'user',
+                parts: [{ text: `(The call just connected. Greet ${name} immediately in 1 short natural sentence in Moroccan Darija as a friend and quant partner picking up the phone: "أهلاً خويا! معك الحوت على الخط المباشر.. شنو باغي نحللو دابا؟")` }]
+              }],
+              turnComplete: true
+            }
+          }));
+        } catch (e) {}
         return;
       }
 
@@ -276,9 +287,17 @@ Trade ideas: give entry, stop and target clearly but briefly, with risk sized fo
       let m;
       try { m = JSON.parse(raw.toString()); } catch (e) { return; }
       if (m.type === 'audio' && m.data) {
-        upstream.send(JSON.stringify({ realtimeInput: { audio: { data: m.data, mimeType: 'audio/pcm;rate=16000' } } }));
+        upstream.send(JSON.stringify({
+          realtimeInput: {
+            mediaChunks: [{ mimeType: 'audio/pcm;rate=16000', data: m.data }]
+          }
+        }));
       } else if (m.type === 'video' && m.data) {
-        upstream.send(JSON.stringify({ realtimeInput: { video: { data: m.data, mimeType: 'image/jpeg' } } }));
+        upstream.send(JSON.stringify({
+          realtimeInput: {
+            mediaChunks: [{ mimeType: 'image/jpeg', data: m.data }]
+          }
+        }));
       } else if (m.type === 'screen_state') {
         upstream.send(JSON.stringify({ realtimeInput: { text: m.on
           ? '(System: the user just started sharing his screen. You now receive live frames of it. Look at it: the app, the chart, candles, price axis, levels, his drawings. When he asks what you see, describe and analyse what is really visible.)'
