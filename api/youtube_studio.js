@@ -189,8 +189,11 @@ ${customTopic ? `التركيز الخاص للحلقة: "${customTopic}"` : ''}
 
       if (Array.isArray(episode.chapters)) {
         episode.chapters = episode.chapters.map((ch, idx) => {
-          const summaryForVoice = (ch.script || ch.title || '').slice(0, 350);
-          
+          // Speak FULL script without premature truncation!
+          const fullScript = (ch.script || ch.title || '').trim();
+          const cleanVoiceText = fullScript.slice(0, 1400); // Up to 1400 chars of full narration
+          const sentences = fullScript.split(/(?<=[.!?؟\n])\s+/).filter(s => s && s.trim().length > 3);
+
           // Generate realistic geometric coordinates and price labels for visual drawings
           const obLow = +(numericSpot - spreadStep * 1.5).toFixed(2);
           const obHigh = +(numericSpot - spreadStep * 0.4).toFixed(2);
@@ -200,6 +203,8 @@ ${customTopic ? `التركيز الخاص للحلقة: "${customTopic}"` : ''}
           const tp1Price = +(numericSpot + spreadStep * 3.2).toFixed(2);
           const tp2Price = +(numericSpot + spreadStep * 5.5).toFixed(2);
           const sweepPrice = +(numericSpot + spreadStep * 2.1).toFixed(2);
+          const fib618 = +(numericSpot - spreadStep * 0.8).toFixed(2);
+          const fib500 = +(numericSpot - spreadStep * 1.1).toFixed(2);
 
           const drawingOverlay = {
             activeMode: idx === 2 ? 'OB' : idx === 3 ? 'FVG' : idx === 4 ? 'TARGETS' : 'ALL',
@@ -231,12 +236,23 @@ ${customTopic ? `التركيز الخاص للحلقة: "${customTopic}"` : ''}
               label: `Liquidity Grab Wick: ${sweepPrice}`,
               sub: 'ذيل سحب السيولة وفخ الصانع (Buy-Side Liquidity BSL)',
               price: sweepPrice
+            },
+            fibonacci: {
+              goldenPocket: fib618,
+              equilibrium: fib500,
+              label: `Fibonacci 0.618 Golden Pocket: ${fib618}`
+            },
+            bosTrendline: {
+              label: `Break of Structure (BoS) @ ${+(numericSpot + spreadStep * 0.9).toFixed(2)}`,
+              price: +(numericSpot + spreadStep * 0.9).toFixed(2)
             }
           };
 
           return {
             ...ch,
-            audioUrl: `/api/tts?text=${encodeURIComponent(summaryForVoice)}&lang=ar`,
+            audioUrl: `/api/tts?text=${encodeURIComponent(cleanVoiceText)}&lang=ar`,
+            fullVoiceText: cleanVoiceText,
+            sentences: sentences.length > 0 ? sentences : [cleanVoiceText],
             drawingOverlay
           };
         });
